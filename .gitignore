@@ -1,0 +1,28 @@
+# ----------------------
+# Environnements virtuels
+# ----------------------
+venv/
+.venv/
+env/
+
+# ----------------------
+# Modèles ML lourds (ne pas envoyer sur GitHub)
+# ----------------------
+models/*.pth
+models/*.pt
+
+# ----------------------
+# Données CSV lourdes (non essentielles)
+# ----------------------
+data/train.csv
+data/val.csv
+data/test.csv
+
+# ----------------------
+# Cache, logs, fichiers temporaires
+# ----------------------
+*.log
+__pycache__/
+*.py[cod]
+*.so
+.env
