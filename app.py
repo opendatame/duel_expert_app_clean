@@ -25,7 +25,7 @@ GLOBAL_CSV = "data/produits_nettoyes.csv"
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 MAX_LEN = 160
-NUM_CLASSES = 882  # ton nombre de classes
+NUM_CLASSES = 882
 
 # ----------------------------
 # DOMAIN EXPERT MODEL
@@ -62,9 +62,11 @@ def load_domain_expert():
         print("Chargement du DomainExpert depuis Hugging Face…")
         model = DomainExpert(NUM_CLASSES).to(DEVICE)
         try:
+            hf_token = os.environ.get("HF_TOKEN")  # token Hugging Face
             ckpt_path = hf_hub_download(
                 repo_id="Bineta123/domain-expert-xlmr",
-                filename="domain_expert_flat.pth"
+                filename="domain_expert_flat.pth",
+                use_auth_token=hf_token
             )
             ckpt = torch.load(ckpt_path, map_location=DEVICE)
             sd = ckpt.get("model_state_dict", ckpt) if isinstance(ckpt, dict) else ckpt
@@ -78,21 +80,31 @@ def load_domain_expert():
             print(f"Erreur chargement modèle Hugging Face : {e}")
 
 # ----------------------------
-# LLM API (HuggingFace) – Lazy loading
+# LLM API (HuggingFace) – Lazy loading avec token
 # ----------------------------
 llm_pipeline = None
+
 def load_llm_api():
     global llm_pipeline
     if llm_pipeline is None:
-        llm_pipeline = pipeline(
-            "text-generation",
-            model="mistralai/Mistral-7B-Instruct-v0.3",
-            device_map="auto",
-            torch_dtype="auto"
-        )
+        hf_token = os.environ.get("HF_TOKEN")
+        try:
+            llm_pipeline = pipeline(
+                "text-generation",
+                model="mistralai/Mistral-7B-Instruct-v0.3",
+                device_map="auto",
+                torch_dtype="auto",
+                use_auth_token=hf_token
+            )
+        except Exception as e:
+            print(f"Impossible de charger Mistral-7B : {e}")
+            llm_pipeline = None
 
 def llm_correct_api(text, top10_preds, wrong_top1):
     load_llm_api()
+    if llm_pipeline is None:
+        return top10_preds[0]  # fallback si le LLM ne charge pas
+
     prompt = f"""
 You are a GENERAL EXPERT correcting a WRONG product classification.
 IMPORTANT: The current top-1 prediction is WRONG and must NOT be selected again.
@@ -258,9 +270,7 @@ def index():
     )
 
 # ----------------------------
-# MAIN
+# MAIN – Render ready
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
-
