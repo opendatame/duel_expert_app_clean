@@ -6,21 +6,22 @@ import pandas as pd, ast, os, gc, time, re
 import torch
 import torch.nn as nn
 from transformers import XLMRobertaTokenizerFast, XLMRobertaModel, pipeline
+from huggingface_hub import hf_hub_download
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 import plotly.graph_objs as go
 import plotly.io as pio
 
 # ----------------------------
-# CONFIG FLASK & PATHS
+# CONFIG FLASK & PATHS RELATIFS
 # ----------------------------
 app = Flask(__name__)
-BACKGROUND_IMAGE = "C:\\Users\\DELL\\Downloads\\Test\\static\\imageeco.jpg"
 
-DOMAIN_CSV = "C:\\Users\\DELL\\Downloads\\Test\\data\\domain_expert_phase2_top10_predictions_full (1).csv"
-DUEL_CSV = "C:\\Users\\DELL\\Downloads\\Test\\data\\duel_expert_mistral_GENERAL_EXPERT_top10_corrected (1).csv"
-GLOBAL_CSV = "C:\\Users\\DELL\\Downloads\\Test\\data\\produits_nettoyes.csv"
-PHASE2_CKPT = "C:\\Users\\DELL\\Downloads\\Test\\models\\domain_expert_flat.pth"
+BACKGROUND_IMAGE = "static/imageeco.jpg"
+
+DOMAIN_CSV = "data/domain_expert_phase2_top10_predictions_full.csv"
+DUEL_CSV = "data/duel_expert_mistral_GENERAL_EXPERT_top10_corrected.csv"
+GLOBAL_CSV = "data/produits_nettoyes.csv"
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 MAX_LEN = 160
@@ -31,7 +32,7 @@ MAX_LEN = 160
 class DomainExpert(nn.Module):
     def __init__(self, n_classes, dropout=0.3):
         super().__init__()
-        self.xlm = XLMRobertaModel.from_pretrained("xlm-roberta-large", local_files_only=True)
+        self.xlm = XLMRobertaModel.from_pretrained("xlm-roberta-large")
         self.dropout = nn.Dropout(dropout)
         self.classifier = nn.Linear(self.xlm.config.hidden_size, n_classes)
 
@@ -43,7 +44,7 @@ class DomainExpert(nn.Module):
 # ----------------------------
 # TOKENIZER & LABEL ENCODER
 # ----------------------------
-tokenizer = XLMRobertaTokenizerFast.from_pretrained("xlm-roberta-large", local_files_only=True)
+tokenizer = XLMRobertaTokenizerFast.from_pretrained("xlm-roberta-large")
 df_global = pd.read_csv(GLOBAL_CSV, sep=';', on_bad_lines='skip')
 df_global['taxonomy_path'] = df_global['taxonomy_path'].astype(str)
 le = LabelEncoder()
@@ -51,25 +52,32 @@ le.fit(df_global['taxonomy_path'].tolist())
 NUM_CLASSES = len(le.classes_)
 
 # ----------------------------
-# DOMAIN EXPERT – Lazy loading
+# DOMAIN EXPERT – Lazy loading depuis Hugging Face
 # ----------------------------
 model = None
 
 def load_domain_expert():
     global model
     if model is None:
-        print("Chargement du DomainExpert…")
+        print("Chargement du DomainExpert depuis Hugging Face…")
         model = DomainExpert(NUM_CLASSES).to(DEVICE)
-        if os.path.exists(PHASE2_CKPT):
-            ckpt = torch.load(PHASE2_CKPT, map_location=DEVICE)
+        
+        try:
+            # Télécharger le checkpoint depuis HF
+            ckpt_path = hf_hub_download(
+                repo_id="Bineta123/domain-expert-xlmr",  # ton repo HF
+                filename="domain_expert_flat.pth"
+            )
+            ckpt = torch.load(ckpt_path, map_location=DEVICE)
             sd = ckpt.get("model_state_dict", ckpt) if isinstance(ckpt, dict) else ckpt
             new_sd = {k.replace("module.", ""): v for k, v in sd.items()}
             model.load_state_dict(new_sd, strict=False)
             del ckpt, sd
             gc.collect()
             torch.cuda.empty_cache()
-        model.eval()
-        print("DomainExpert chargé !")
+            print("DomainExpert chargé !")
+        except Exception as e:
+            print(f"Erreur chargement modèle Hugging Face : {e}")
 
 # ----------------------------
 # LLM API (HuggingFace) – Lazy loading
@@ -186,7 +194,6 @@ def index():
     new_product = request.form.get("product_text")
     products = []
 
-    # Récupération des produits à prédire
     if uploaded_file:
         try:
             df_new = pd.read_csv(uploaded_file, sep=";", on_bad_lines="skip")
@@ -201,10 +208,8 @@ def index():
         desc = get_description_from_image(uploaded_image)
         products = [desc]
 
-    # Charger le DomainExpert
     load_domain_expert()
 
-    # Générer les prédictions
     for prod in products:
         enc = tokenizer(prod, truncation=True, padding="max_length", max_length=MAX_LEN, return_tensors="pt")
         input_ids = enc["input_ids"].to(DEVICE)
@@ -215,13 +220,11 @@ def index():
             top1_idx = torch.argmax(logits, dim=-1).item()
             top1_label = le.inverse_transform([top1_idx])[0]
 
-        # ✅ Corrigé : prendre le top10 correspondant au produit si présent dans df_domain
         if "top10_preds" in df_domain.columns and prod in df_domain['text'].values:
             top10_candidates = df_domain.loc[df_domain['text'] == prod, 'top10_preds'].values[0][:10]
         else:
             top10_candidates = [top1_label]
 
-        # Vérifier si LLM est nécessaire
         if top1_label not in top10_candidates:
             final_label = llm_correct_api(prod, top10_candidates, top1_label)
             llm_msg = "LLM utilisé pour raffinement (API)"
@@ -236,12 +239,7 @@ def index():
             "top10": top10_candidates
         })
 
-    elapsed_time = round(time.time() - start_time, 2)
-
-    # Exemple produits pour le tableau (dicts)
     example_products = df_duel.head(10).to_dict(orient="records")
-
-    # S'assurer que toutes les clés sont présentes pour le template
     for p in example_products:
         p.setdefault("description", p.get("text", ""))
         p.setdefault("top1_pred", "-")
@@ -258,11 +256,11 @@ def index():
         plot_html=plot_metrics_html,
         prediction_results=prediction_results,
         llm_msg=llm_msg,
-        elapsed_time=elapsed_time
+        elapsed_time=round(time.time() - start_time, 2)
     )
 
 # ----------------------------
 # MAIN
 # ----------------------------
 if __name__ == "__main__":
-    app.run(debug=True, host="127.0.0.1", port=5000, use_reloader=False)
+    app.run(debug=True, host="0.0.0.0", port=5000, use_reloader=False)
