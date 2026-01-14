@@ -25,6 +25,7 @@ GLOBAL_CSV = "data/produits_nettoyes.csv"
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 MAX_LEN = 160
+NUM_CLASSES = 882  # ton nombre de classes
 
 # ----------------------------
 # DOMAIN EXPERT MODEL
@@ -49,7 +50,6 @@ df_global = pd.read_csv(GLOBAL_CSV, sep=';', on_bad_lines='skip')
 df_global['taxonomy_path'] = df_global['taxonomy_path'].astype(str)
 le = LabelEncoder()
 le.fit(df_global['taxonomy_path'].tolist())
-NUM_CLASSES = len(le.classes_)
 
 # ----------------------------
 # DOMAIN EXPERT – Lazy loading depuis Hugging Face
@@ -61,11 +61,9 @@ def load_domain_expert():
     if model is None:
         print("Chargement du DomainExpert depuis Hugging Face…")
         model = DomainExpert(NUM_CLASSES).to(DEVICE)
-        
         try:
-            # Télécharger le checkpoint depuis HF
             ckpt_path = hf_hub_download(
-                repo_id="Bineta123/domain-expert-xlmr",  # ton repo HF
+                repo_id="Bineta123/domain-expert-xlmr",
                 filename="domain_expert_flat.pth"
             )
             ckpt = torch.load(ckpt_path, map_location=DEVICE)
