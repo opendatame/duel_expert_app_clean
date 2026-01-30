@@ -6,27 +6,32 @@ venv/
 env/
 
 # ----------------------
-# Modèles ML lourds (ne pas envoyer sur GitHub)
+# Modèles ML lourds
 # ----------------------
 models/*.pth
 models/*.pt
 
 # ----------------------
-# Données CSV lourdes (non essentielles)
+# Données
 # ----------------------
-data/train.csv
-data/val.csv
-data/test.csv
+data/*.csv
 
 # ----------------------
-# Cache, logs, fichiers temporaires
+# Cache / ML
 # ----------------------
-*.log
-__pycache__/
-*.py[cod]
-*.so
-.env
-# Torch / Transformers cache
 .cache/
 torch_cache/
 huggingface/
+
+# ----------------------
+# Python
+# ----------------------
+__pycache__/
+*.py[cod]
+*.so
+
+# ----------------------
+# Logs / env
+# ----------------------
+*.log
+.env
