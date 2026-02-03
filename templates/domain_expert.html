@@ -22,9 +22,18 @@
 
     body{
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-image: url("{{ background_image }}");
+
+      /* ✅ Render-safe: background_image_url = /static/imageeco.jpg */
+      background-image: url("{{ background_image_url }}");
+
+      /* ✅ Fallback si image absente */
+      background-color: #f3f6fb;
+
       background-size: cover;
       background-attachment: fixed;
+      background-position: center;
+      background-repeat: no-repeat;
+
       color:#1b1b1b;
       margin:0;
       padding: 22px;
