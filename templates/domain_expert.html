@@ -1,219 +1,473 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <title>🛒 Duel Expert – Product Categorization</title>
-    <style>
-        /* === BODY & FOND === */
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-image: url("{{ background_image }}");
-            background-size: cover;
-            background-attachment: fixed;
-            color: #333;
-            padding: 20px;
-        }
-        h1, h2 {
-            color: #0d47a1;
-            text-shadow: 1px 1px 2px #ffffffaa;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>🛒 Duel Expert – Product Categorization</title>
 
-        /* === BOXES === */
-        .metrics, .prediction, .form-section {
-            background-color: rgba(255, 255, 255, 0.95);
-            padding: 20px;
-            border-radius: 15px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            margin-bottom: 25px;
-        }
+  <style>
+    :root{
+      --primary:#0d47a1;
+      --primary2:#1e88e5;
+      --bg: rgba(255,255,255,0.92);
+      --shadow: 0 10px 25px rgba(0,0,0,0.12);
+      --radius: 18px;
+      --border: rgba(13,71,161,0.18);
+      --danger:#b71c1c;
+      --warn:#e65100;
+      --ok:#1b5e20;
+    }
 
-        /* === TABLE === */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-            background-color: rgba(255,255,255,0.95);
-        }
-        th, td {
-            border: 1px solid #bbb;
-            padding: 10px;
-            text-align: left;
-        }
-        th {
-            background-color: #0d47a1;
-            color: #fff;
-        }
-        tr:nth-child(even) {
-            background-color: rgba(13,71,161,0.05);
-        }
-        tr:hover {
-            background-color: rgba(13,71,161,0.15);
-        }
+    *{ box-sizing: border-box; }
 
-        /* === INPUTS & BOUTONS === */
-        input[type="text"], input[type="file"] {
-            width: 70%;
-            padding: 10px;
-            border-radius: 8px;
-            border: 1px solid #ccc;
-            margin-bottom: 10px;
-        }
-        input[type="submit"] {
-            padding: 10px 20px;
-            background: linear-gradient(90deg,#1e88e5,#42a5f5);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: 0.3s;
-        }
-        input[type="submit"]:hover {
-            background: linear-gradient(90deg,#1565c0,#1e88e5);
-        }
+    body{
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-image: url("{{ background_image }}");
+      background-size: cover;
+      background-attachment: fixed;
+      color:#1b1b1b;
+      margin:0;
+      padding: 22px;
+    }
 
-        /* === PLOTLY === */
-        .plotly-div {
-            margin-top: 25px;
-            border-radius: 15px;
-            overflow: hidden;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
+    .overlay{
+      position: fixed;
+      inset: 0;
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(2px);
+      z-index: -1;
+    }
 
-        /* === MESSAGE CHARGEMENT === */
-        #loading-message {
-            display: none;
-            margin-top: 15px;
-            font-weight: bold;
-            color: #e65100;
-        }
+    .container{
+      max-width: 1100px;
+      margin: 0 auto;
+    }
 
-        /* === RESPONSIVE === */
-        @media(max-width: 768px){
-            input[type="text"], input[type="file"] {
-                width: 100%;
-                margin-bottom: 15px;
-            }
-            input[type="submit"] {
-                width: 100%;
-            }
-        }
-    </style>
+    header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .title{
+      display:flex;
+      flex-direction:column;
+      gap: 4px;
+    }
+
+    h1{
+      margin:0;
+      font-size: 28px;
+      color: var(--primary);
+      text-shadow: 1px 1px 2px #ffffffaa;
+      letter-spacing: .2px;
+    }
+
+    .subtitle{
+      margin:0;
+      color:#2d2d2d;
+      opacity:.85;
+      font-size: 14px;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.85);
+      border: 1px solid var(--border);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+      font-weight: 600;
+      font-size: 13px;
+      color: #123;
+      white-space: nowrap;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .card{
+      background: var(--bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      padding: 18px;
+    }
+
+    .card h2{
+      margin: 0 0 10px 0;
+      font-size: 18px;
+      color: var(--primary);
+    }
+
+    .metrics-list{
+      margin:0;
+      padding:0;
+      list-style:none;
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 14px;
+    }
+
+    .metric{
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(13,71,161,0.06);
+      border: 1px solid rgba(13,71,161,0.10);
+    }
+
+    .metric .k{
+      display:block;
+      font-size: 12px;
+      opacity: .8;
+      margin-bottom: 4px;
+    }
+    .metric .v{
+      font-weight: 800;
+      font-size: 16px;
+      color:#102a43;
+    }
+
+    .warn{
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(230,81,0,0.10);
+      border: 1px solid rgba(230,81,0,0.22);
+      color: #5a2f00;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+
+    .plot-wrap{
+      margin-top: 12px;
+      border-radius: var(--radius);
+      overflow:hidden;
+      border: 1px solid rgba(0,0,0,0.08);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.10);
+      background: rgba(255,255,255,0.90);
+    }
+
+    /* Form */
+    form{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .row{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    label{
+      font-weight: 700;
+      font-size: 13px;
+      color:#183153;
+      margin-bottom: 6px;
+      display:block;
+    }
+
+    input[type="text"], input[type="file"]{
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(0,0,0,0.15);
+      background: rgba(255,255,255,0.95);
+      outline:none;
+    }
+
+    .actions{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items:center;
+    }
+
+    button, input[type="submit"]{
+      padding: 11px 16px;
+      background: linear-gradient(90deg, var(--primary2), #42a5f5);
+      color:white;
+      border: none;
+      border-radius: 14px;
+      cursor:pointer;
+      font-weight: 800;
+      transition: transform .08s ease, opacity .15s ease;
+      box-shadow: 0 10px 22px rgba(30,136,229,0.22);
+    }
+
+    button:active, input[type="submit"]:active{
+      transform: translateY(1px);
+      opacity:.95;
+    }
+
+    .hint{
+      font-size: 12px;
+      opacity: .8;
+    }
+
+    /* Prediction */
+    .prediction h3{
+      margin: 0 0 10px 0;
+      color: var(--primary);
+    }
+
+    .badge{
+      display:inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-weight: 800;
+      font-size: 12px;
+      border: 1px solid rgba(0,0,0,0.10);
+      background: rgba(255,255,255,0.90);
+    }
+    .badge.ok{ color: var(--ok); border-color: rgba(27,94,32,0.20); background: rgba(27,94,32,0.08); }
+    .badge.warn{ color: var(--warn); border-color: rgba(230,81,0,0.20); background: rgba(230,81,0,0.08); }
+    .badge.err{ color: var(--danger); border-color: rgba(183,28,28,0.20); background: rgba(183,28,28,0.08); }
+
+    /* Table */
+    table{
+      width:100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      overflow:hidden;
+      border-radius: 14px;
+      border: 1px solid rgba(0,0,0,0.10);
+      background: rgba(255,255,255,0.95);
+    }
+    th, td{
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+      padding: 10px 10px;
+      text-align:left;
+      vertical-align: top;
+      font-size: 13px;
+    }
+    th{
+      background: rgba(13,71,161,0.95);
+      color:white;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    tr:nth-child(even) td{
+      background: rgba(13,71,161,0.04);
+    }
+    tr:hover td{
+      background: rgba(13,71,161,0.10);
+    }
+
+    #loading-message{
+      display:none;
+      margin-top: 10px;
+      font-weight: 800;
+      color: var(--warn);
+    }
+
+    @media(max-width: 900px){
+      .grid{ grid-template-columns: 1fr; }
+      .row{ grid-template-columns: 1fr; }
+      body{ padding: 14px; }
+    }
+  </style>
 </head>
+
 <body>
-    <h1>🛒 Duel Expert – Product Categorization</h1>
+  <div class="overlay"></div>
+
+  <div class="container">
+    <header>
+      <div class="title">
+        <h1>🛒 Duel Expert – Product Categorization</h1>
+        <p class="subtitle">Domain Expert (XLM-R) + affichage métriques & prédictions (Render-safe)</p>
+      </div>
+
+      <div class="pill">
+        ✅ Status :
+        {% if llm_msg %}
+          <span>{{ llm_msg }}</span>
+        {% else %}
+          <span>Ready</span>
+        {% endif %}
+      </div>
+    </header>
 
     <!-- METRICS -->
-    <div class="metrics">
+    <div class="grid">
+      <div class="card">
         <h2>📊 Domain Expert Metrics</h2>
-        <p><strong>Accuracy:</strong> {{ domain_metrics['accuracy']|round(4) }}</p>
-        <p><strong>Precision (Macro):</strong> {{ domain_metrics['precision']|round(4) }}</p>
-        <p><strong>Recall (Macro):</strong> {{ domain_metrics['recall']|round(4) }}</p>
-        <p><strong>F1 (Macro):</strong> {{ domain_metrics['f1']|round(4) }}</p>
-        <p><strong>Top-10 Accuracy:</strong> {{ domain_metrics['top10_acc']|round(4) }}</p>
-    </div>
 
-    <div class="metrics">
+        {% if domain_metrics %}
+          <ul class="metrics-list">
+            <li class="metric"><span class="k">Accuracy</span><span class="v">{{ domain_metrics['accuracy']|round(4) }}</span></li>
+            <li class="metric"><span class="k">Top-10 Accuracy</span><span class="v">{{ domain_metrics['top10_acc']|round(4) }}</span></li>
+            <li class="metric"><span class="k">Precision (Macro)</span><span class="v">{{ domain_metrics['precision']|round(4) }}</span></li>
+            <li class="metric"><span class="k">Recall (Macro)</span><span class="v">{{ domain_metrics['recall']|round(4) }}</span></li>
+            <li class="metric"><span class="k">F1 (Macro)</span><span class="v">{{ domain_metrics['f1']|round(4) }}</span></li>
+          </ul>
+        {% else %}
+          <div class="warn">
+            ⚠️ Metrics Domain Expert non disponibles.<br>
+            Vérifie que <code>data/domain_expert_phase2_top10_predictions_full.csv</code> est bien présent et a les colonnes attendues.
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="card">
         <h2>📊 Duel Expert Metrics</h2>
-        <p><strong>Accuracy:</strong> {{ duel_metrics['accuracy']|round(4) }}</p>
-        <p><strong>Precision (Macro):</strong> {{ duel_metrics['precision']|round(4) }}</p>
-        <p><strong>Recall (Macro):</strong> {{ duel_metrics['recall']|round(4) }}</p>
-        <p><strong>F1 (Macro):</strong> {{ duel_metrics['f1']|round(4) }}</p>
-        <p><strong>Top-10 Accuracy:</strong> {{ duel_metrics['top10_acc']|round(4) }}</p>
+
+        {% if duel_metrics %}
+          <ul class="metrics-list">
+            <li class="metric"><span class="k">Accuracy</span><span class="v">{{ duel_metrics['accuracy']|round(4) }}</span></li>
+            <li class="metric"><span class="k">Top-10 Accuracy</span><span class="v">{{ duel_metrics['top10_acc']|round(4) }}</span></li>
+            <li class="metric"><span class="k">Precision (Macro)</span><span class="v">{{ duel_metrics['precision']|round(4) }}</span></li>
+            <li class="metric"><span class="k">Recall (Macro)</span><span class="v">{{ duel_metrics['recall']|round(4) }}</span></li>
+            <li class="metric"><span class="k">F1 (Macro)</span><span class="v">{{ duel_metrics['f1']|round(4) }}</span></li>
+          </ul>
+        {% else %}
+          <div class="warn">
+            ⚠️ Metrics Duel Expert non disponibles.<br>
+            Vérifie que <code>data/duel_expert_mistral_GENERAL_EXPERT_top10_corrected.csv</code> est bien présent et a les colonnes attendues.
+          </div>
+        {% endif %}
+      </div>
     </div>
 
     <!-- PLOTLY -->
-    <div class="plotly-div">
+    {% if plot_html %}
+      <div class="plot-wrap">
         {{ plot_html|safe }}
-    </div>
+      </div>
+    {% else %}
+      <div class="card">
+        <div class="warn">⚠️ Plot indisponible (métriques manquantes ou CSV non chargé).</div>
+      </div>
+    {% endif %}
 
     <!-- FORMULAIRE -->
-    <div class="form-section">
-        <h2>📝 Prédiction d'un nouveau produit, image ou CSV</h2>
-        <form id="predict-form" method="post" enctype="multipart/form-data">
+    <div class="card" style="margin-top:16px;">
+      <h2>📝 Prédiction d'un nouveau produit, image ou CSV</h2>
+
+      <form id="predict-form" method="post" enctype="multipart/form-data">
+        <div class="row">
+          <div>
+            <label>Texte produit</label>
             <input type="text" name="product_text" placeholder="Entrez la description du produit">
-            <br><br>
+            <div class="hint">Astuce: colle une phrase complète (marque, matière, usage…)</div>
+          </div>
+          <div>
+            <label>Fichier CSV (colonne: text ou description)</label>
             <input type="file" name="csv_file" accept=".csv">
-            <br><br>
-            <input type="file" name="product_image" accept="image/*">
-            <br><br>
-            <input type="submit" value="Prédire">
-        </form>
-
-        <div id="loading-message">⏳ Chargement du modèle Duel Expert… veuillez patienter !</div>
-
-        {% if prediction_results %}
-        <div class="prediction">
-            <h3>Résultat :</h3>
-            {% if prediction_results|length == 1 %}
-                <p><strong>Top-1 Domain Expert:</strong> {{ prediction_results[0]['top1'] }}</p>
-                <p><strong>Duel Expert final:</strong> {{ prediction_results[0]['final'] }}</p>
-                <p><strong>Temps de prédiction:</strong> {{ elapsed_time }} secondes</p>
-            {% else %}
-                <p><strong>{{ prediction_results|length }} produits prédits à partir du CSV ou image</strong></p>
-                <table>
-                    <tr>
-                        <th>#</th>
-                        <th>Description</th>
-                        <th>Top-1 Domain Expert</th>
-                        <th>Top-10 Domain Expert</th>
-                        <th>Duel Expert final</th>
-                    </tr>
-                    {% for p in prediction_results %}
-                    <tr>
-                        <td>{{ loop.index }}</td>
-                        <td>{{ p['text'][:150] }}{% if p['text']|length > 150 %}...{% endif %}</td>
-                        <td>{{ p['top1'] }}</td>
-                        <td>
-                            {% if p['top10'] %}
-                                {{ p['top10'][:10] }}
-                            {% else %}
-                                -
-                            {% endif %}
-                        </td>
-                        <td>{{ p['final'] }}</td>
-                    </tr>
-                    {% endfor %}
-                </table>
-                <p><strong>Temps total:</strong> {{ elapsed_time }} secondes</p>
-            {% endif %}
+            <div class="hint">Séparateur conseillé: ; (comme tes CSV Auchan)</div>
+          </div>
         </div>
-        {% endif %}
+
+        <div class="row">
+          <div>
+            <label>Image produit (optionnel)</label>
+            <input type="file" name="product_image" accept="image/*">
+            <div class="hint">Note: si tu n’as pas encore le modèle image→texte, ça restera un placeholder.</div>
+          </div>
+
+          <div class="actions">
+            <input type="submit" value="🚀 Prédire">
+            {% if elapsed_time is not none %}
+              <span class="badge ok">⏱ {{ elapsed_time }}s</span>
+            {% endif %}
+          </div>
+        </div>
+      </form>
+
+      <div id="loading-message">⏳ Chargement / prédiction… veuillez patienter !</div>
+
+      {% if prediction_results %}
+        <div class="prediction" style="margin-top:14px;">
+          <h3>Résultat</h3>
+
+          {% if prediction_results|length == 1 %}
+            <p><span class="badge ok">Top-1 Domain</span> {{ prediction_results[0]['top1'] }}</p>
+            <p><span class="badge ok">Final</span> {{ prediction_results[0]['final'] }}</p>
+          {% else %}
+            <p><strong>{{ prediction_results|length }} produits prédits</strong></p>
+            <table>
+              <tr>
+                <th>#</th>
+                <th>Description</th>
+                <th>Top-1 Domain</th>
+                <th>Top-10 Domain</th>
+                <th>Final</th>
+              </tr>
+              {% for p in prediction_results %}
+                <tr>
+                  <td>{{ loop.index }}</td>
+                  <td>{{ p['text'][:150] }}{% if p['text']|length > 150 %}...{% endif %}</td>
+                  <td>{{ p['top1'] }}</td>
+                  <td>
+                    {% if p['top10'] %}
+                      {{ p['top10'][:10] }}
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                  <td>{{ p['final'] }}</td>
+                </tr>
+              {% endfor %}
+            </table>
+          {% endif %}
+        </div>
+      {% endif %}
     </div>
 
     <!-- TABLE EXEMPLE -->
-    <h2>📦 Exemple de 10 premiers produits</h2>
-    <table>
-        <tr>
+    <div class="card" style="margin-top:16px;">
+      <h2>📦 Exemple de 10 premiers produits</h2>
+
+      {% if products and products|length > 0 %}
+        <table>
+          <tr>
             <th>#</th>
             <th>Description</th>
-            <th>Top-1 Domain Expert</th>
-            <th>Top-10 Domain Expert</th>
-            <th>Duel Expert final</th>
+            <th>Top-1 Domain</th>
+            <th>Top-10 Domain</th>
+            <th>Final</th>
             <th>Vrai label</th>
-        </tr>
-        {% for p in products %}
-        <tr>
-            <td>{{ loop.index }}</td>
-            <td>{{ p['description'][:150] }}{% if p['description']|length > 150 %}...{% endif %}</td>
-            <td>{{ p['top1_pred'] }}</td>
-            <td>
-                {% if p['top10_preds'] %}
-                    {{ p['top10_preds'][:10] }}
+          </tr>
+          {% for p in products %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td>{{ (p.get('description', '') or p.get('text',''))[:150] }}{% if (p.get('description','') or p.get('text',''))|length > 150 %}...{% endif %}</td>
+              <td>{{ p.get('top1_pred','-') }}</td>
+              <td>
+                {% if p.get('top10_preds') %}
+                  {{ p.get('top10_preds')[:10] }}
                 {% else %}
-                    -
+                  -
                 {% endif %}
-            </td>
-            <td>{{ p['final_duel_pred'] }}</td>
-            <td>{{ p['true_label'] }}</td>
-        </tr>
-        {% endfor %}
-    </table>
+              </td>
+              <td>{{ p.get('final_duel_pred','-') }}</td>
+              <td>{{ p.get('true_label','-') }}</td>
+            </tr>
+          {% endfor %}
+        </table>
+      {% else %}
+        <div class="warn">⚠️ Aucun produit exemple à afficher (CSV duel non chargé).</div>
+      {% endif %}
+    </div>
+  </div>
 
-    <script>
-        document.getElementById("predict-form").addEventListener("submit", function() {
-            document.getElementById("loading-message").style.display = "block";
-        });
-    </script>
+  <script>
+    document.getElementById("predict-form").addEventListener("submit", function() {
+      var el = document.getElementById("loading-message");
+      if (el) el.style.display = "block";
+    });
+  </script>
 </body>
 </html>
