@@ -1,5 +1,8 @@
 # ================================
-# app.py – Render-ready (robust)
+# app.py – Render-ready (robust) ✅ CORRIGÉ
+# - Ajoute les routes /api/* (car ton frontend appelle /api/ping, /api/predict, /api/leaderboard)
+# - Garde aussi /ping, /predict, /health, /health_model (compat)
+# - Toujours JSON sur /api/*
 # ================================
 
 from flask import Flask, render_template, request, jsonify, url_for
@@ -18,6 +21,7 @@ import plotly.io as pio
 
 from huggingface_hub import hf_hub_download
 from transformers import XLMRobertaTokenizerFast, XLMRobertaModel
+from werkzeug.exceptions import HTTPException
 
 # ----------------------------
 # APP
@@ -61,7 +65,7 @@ BACKBONE_MODEL = os.getenv("BACKBONE_MODEL", "xlm-roberta-large")
 
 MAX_LEN = int(os.getenv("MAX_LEN", "160"))
 
-# HF model
+# HF model (.pth)
 HF_REPO_ID  = os.getenv("HF_REPO_ID", "Bineta123/domain-expert-xlmr")
 HF_FILENAME = os.getenv("HF_FILENAME", "domain_expert_flat.pth")
 HF_TOKEN    = os.getenv("HF_TOKEN")  # public => None OK
@@ -87,12 +91,36 @@ plot_metrics_html = None
 
 
 # ----------------------------
+# ALWAYS JSON FOR /api/*
+# ----------------------------
+@app.errorhandler(HTTPException)
+def handle_http_exception(e: HTTPException):
+    if request.path.startswith("/api/"):
+        return jsonify({
+            "ok": False,
+            "error": f"{type(e).__name__}: {e.description}",
+            "path": request.path
+        }), e.code
+    return e
+
+@app.errorhandler(Exception)
+def handle_any_exception(e):
+    if request.path.startswith("/api/"):
+        return jsonify({
+            "ok": False,
+            "error": f"{type(e).__name__}: {str(e)}",
+            "path": request.path,
+            "trace": traceback.format_exc().splitlines()[-12:]
+        }), 500
+    raise e
+
+
+# ----------------------------
 # Helpers
 # ----------------------------
 def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = [str(c).replace("\ufeff", "").strip() for c in df.columns]
     return df
-
 
 def safe_read_csv(path: str):
     if not path or not os.path.exists(path):
@@ -121,7 +149,6 @@ def safe_read_csv(path: str):
 
     return None
 
-
 def ensure_model_file(local_path: str):
     """Download .pth from HF if missing or too small."""
     if os.path.exists(local_path):
@@ -149,7 +176,6 @@ def ensure_model_file(local_path: str):
         print("[MODEL] ✅ downloaded to:", local_path, "size=", os.path.getsize(local_path))
     except Exception:
         print("[MODEL] ✅ downloaded to:", local_path)
-
 
 def extract_state_dict(ckpt):
     if not isinstance(ckpt, dict):
@@ -183,7 +209,6 @@ def load_tokenizer_if_needed():
         print("[LOAD] tokenizer:", BACKBONE_MODEL)
         tokenizer = XLMRobertaTokenizerFast.from_pretrained(BACKBONE_MODEL)
 
-
 def load_label_encoder_if_needed():
     global le, NUM_CLASSES
     if le is not None and NUM_CLASSES is not None:
@@ -204,7 +229,6 @@ def load_label_encoder_if_needed():
     NUM_CLASSES = len(le.classes_)
     print("[INIT] NUM_CLASSES:", NUM_CLASSES)
 
-
 def load_domain_expert_if_needed():
     """Loads tokenizer + label encoder + model (once)."""
     global model
@@ -218,7 +242,6 @@ def load_domain_expert_if_needed():
 
         load_label_encoder_if_needed()
         load_tokenizer_if_needed()
-
         ensure_model_file(PHASE2_CKPT)
 
         print("[LOAD] creating model:", BACKBONE_MODEL, "| device:", DEVICE)
@@ -276,7 +299,6 @@ def pick_true_col(df: pd.DataFrame):
         if c in df.columns:
             return c
     return None
-
 
 def load_optional_assets_if_needed():
     global df_domain, df_duel, domain_metrics, duel_metrics, plot_metrics_html
@@ -344,61 +366,8 @@ def load_optional_assets_if_needed():
 
 
 # ----------------------------
-# ROUTES
+# ROUTES (pages)
 # ----------------------------
-@app.route("/ping")
-def ping():
-    return "pong", 200
-
-
-@app.route("/health")
-def health():
-    return jsonify({
-        "ok": True,
-        "device": DEVICE,
-        "backbone": BACKBONE_MODEL,
-        "exists": {
-            "global_csv": os.path.exists(GLOBAL_CSV),
-            "domain_csv": os.path.exists(DOMAIN_CSV),
-            "duel_csv": os.path.exists(DUEL_CSV),
-            "pth_present": os.path.exists(PHASE2_CKPT),
-        }
-    })
-
-
-@app.route("/health_model")
-def health_model():
-    try:
-        labels, probs = predict_topk("test produit", k=3)
-        return jsonify({"ok": True, "labels": labels, "conf": probs})
-    except Exception as e:
-        return jsonify({
-            "ok": False,
-            "error": f"{type(e).__name__}: {str(e)}",
-            "trace": traceback.format_exc().splitlines()[-10:]
-        }), 500
-
-
-@app.route("/predict", methods=["POST"])
-def predict_api():
-    data = request.get_json(silent=True) or {}
-    text = (data.get("text") or "").strip()
-    k = int(data.get("k", 10))
-
-    if not text:
-        return jsonify({"ok": False, "error": "Missing 'text'"}), 400
-
-    try:
-        labels, probs = predict_topk(text, k=k)
-        return jsonify({"ok": True, "top1": labels[0], "top10": labels, "conf": float(probs[0])})
-    except Exception as e:
-        return jsonify({
-            "ok": False,
-            "error": f"{type(e).__name__}: {str(e)}",
-            "trace": traceback.format_exc().splitlines()[-10:]
-        }), 500
-
-
 @app.route("/", methods=["GET", "POST"])
 def index():
     prediction_results = []
@@ -479,7 +448,72 @@ def index():
 
 
 # ----------------------------
-# Optional preload (useful to see errors in logs during boot)
+# ROUTES (legacy non-/api)
+# ----------------------------
+@app.route("/ping")
+def ping():
+    return "pong", 200
+
+@app.route("/health")
+def health():
+    return jsonify({
+        "ok": True,
+        "device": DEVICE,
+        "backbone": BACKBONE_MODEL,
+        "exists": {
+            "global_csv": os.path.exists(GLOBAL_CSV),
+            "domain_csv": os.path.exists(DOMAIN_CSV),
+            "duel_csv": os.path.exists(DUEL_CSV),
+            "pth_present": os.path.exists(PHASE2_CKPT),
+        }
+    })
+
+@app.route("/health_model")
+def health_model():
+    labels, probs = predict_topk("test produit", k=3)
+    return jsonify({"ok": True, "labels": labels, "conf": probs})
+
+@app.route("/predict", methods=["POST"])
+def predict_api():
+    data = request.get_json(silent=True) or {}
+    text = (data.get("text") or "").strip()
+    k = int(data.get("k", 10))
+    if not text:
+        return jsonify({"ok": False, "error": "Missing 'text'"}), 400
+    labels, probs = predict_topk(text, k=k)
+    return jsonify({"ok": True, "top1": labels[0], "top10": labels, "conf": float(probs[0])})
+
+
+# ----------------------------
+# ROUTES (/api/*) ✅ IMPORTANT FOR YOUR FRONTEND
+# ----------------------------
+@app.route("/api/ping")
+def api_ping():
+    return jsonify({"ok": True, "msg": "pong"}), 200
+
+@app.route("/api/health")
+def api_health():
+    return health()
+
+@app.route("/api/health_model")
+def api_health_model():
+    try:
+        return health_model()
+    except Exception as e:
+        return jsonify({
+            "ok": False,
+            "error": f"{type(e).__name__}: {str(e)}",
+            "trace": traceback.format_exc().splitlines()[-10:]
+        }), 500
+
+@app.route("/api/predict", methods=["POST"])
+def api_predict():
+    # alias to /predict (frontend expects this)
+    return predict_api()
+
+
+# ----------------------------
+# Optional preload
 # ----------------------------
 if PRELOAD_MODEL:
     try:
