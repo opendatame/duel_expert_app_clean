@@ -2,15 +2,17 @@
 
 import os
 import traceback
-
 import requests
 from flask import Flask, render_template, request, jsonify
 from werkzeug.exceptions import HTTPException
 
 app = Flask(__name__)
 
+# URL de ton HF Space (API FastAPI)
 DOMAIN_API_BASE = os.getenv("DOMAIN_API_BASE", "https://bineta123-domainexpert-api.hf.space").rstrip("/")
-REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "30"))
+REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "60"))  # plus long (cold start HF)
+
+session = requests.Session()
 
 
 # ----------------------------
@@ -40,21 +42,18 @@ def handle_any_exception(e):
 
 
 # ----------------------------
-# UPSTREAM CALL
+# Proxy helper
 # ----------------------------
 def call_domain_api(method: str, path: str, json_body=None):
     url = f"{DOMAIN_API_BASE}{path}"
 
     try:
-        r = requests.request(
+        r = session.request(
             method=method,
             url=url,
             json=json_body,
             timeout=REQUEST_TIMEOUT,
-            headers={
-                "Accept": "application/json",
-                "User-Agent": "Render-Proxy/1.0"
-            },
+            headers={"Accept": "application/json"},
         )
     except requests.RequestException as e:
         return None, {
@@ -64,52 +63,50 @@ def call_domain_api(method: str, path: str, json_body=None):
         }, 502
 
     txt = r.text or ""
-    # Upstream status code is useful
-    status = r.status_code
 
-    # Try JSON if possible
-    if txt.strip():
-        try:
-            data = r.json()
-            return data, None, status
-        except Exception:
-            # Upstream returned HTML/text -> still return JSON to frontend
-            return None, {
-                "ok": False,
-                "error": "UpstreamNotJSON",
-                "upstream": url,
-                "status_code": status,
-                "content_type": r.headers.get("content-type"),
-                "text_preview": txt[:400],
-            }, 502
-    else:
-        # Empty body -> still return JSON
+    # Si upstream renvoie HTML/vides, on renvoie quand même du JSON clair
+    try:
+        data = r.json() if txt.strip() else {}
+    except Exception:
         return None, {
             "ok": False,
-            "error": "UpstreamEmptyBody",
+            "error": "UpstreamNotJSON",
             "upstream": url,
-            "status_code": status,
+            "status_code": r.status_code,
+            "text_preview": txt[:300]
         }, 502
+
+    # Si upstream renvoie une erreur, on la propage en JSON
+    if r.status_code >= 400:
+        return None, {
+            "ok": False,
+            "error": "UpstreamHTTPError",
+            "upstream": url,
+            "status_code": r.status_code,
+            "upstream_json": data
+        }, 502
+
+    return data, None, r.status_code
 
 
 # ----------------------------
-# PAGES
+# Pages (UI)
 # ----------------------------
 @app.route("/", methods=["GET"])
 def home():
-    # Ton template UI
+    # ton template UI
     return render_template("domain_expert.html")
 
 
 # ----------------------------
-# API (frontend expects these)
+# API routes used by your frontend
 # ----------------------------
 @app.route("/api/ping", methods=["GET"])
 def api_ping():
     data, err, code = call_domain_api("GET", "/ping")
     if err:
         return jsonify(err), code
-    return jsonify({"ok": True, "upstream": data}), 200
+    return jsonify({"ok": True, "upstream": data, "base": DOMAIN_API_BASE}), 200
 
 
 @app.route("/api/health", methods=["GET"])
@@ -131,29 +128,26 @@ def api_health_model():
 @app.route("/api/predict", methods=["POST"])
 def api_predict():
     payload = request.get_json(silent=True) or {}
-    text = (payload.get("text") or "").strip()
-    k = payload.get("k", 10)
+    text = str(payload.get("text", "")).strip()
+    k = int(payload.get("k", 10))
 
     if not text:
         return jsonify({"ok": False, "error": "Missing 'text'"}), 400
 
-    data, err, code = call_domain_api("POST", "/predict", json_body={"text": text, "k": int(k)})
+    data, err, code = call_domain_api("POST", "/predict", {"text": text, "k": k})
     if err:
         return jsonify(err), code
 
-    # HF Space returns: {"ok": True, "top1": ..., "conf": ..., "topk": [...]}
-    if isinstance(data, dict) and data.get("ok") is True:
-        return jsonify({
-            "ok": True,
-            "top1": data.get("top1"),
-            "conf": data.get("conf"),
-            "top10": data.get("topk", []),
-        }), 200
-
-    return jsonify({"ok": False, "error": "Bad upstream response", "upstream": data}), 502
+    # HF FastAPI renvoie: {"ok": True, "top1": ..., "conf": ..., "topk": [...]}
+    return jsonify({
+        "ok": True,
+        "top1": data.get("top1"),
+        "conf": data.get("conf"),
+        "top10": data.get("topk", [])
+    }), 200
 
 
-# legacy ping (optionnel)
+# petit ping Render (utile pour tester vite)
 @app.route("/ping", methods=["GET"])
 def ping():
     return "pong", 200
