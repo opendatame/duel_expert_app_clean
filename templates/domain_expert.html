@@ -22,18 +22,12 @@
 
     body{
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-
-      /* ✅ Render-safe: background_image_url = /static/imageeco.jpg */
       background-image: url("{{ background_image_url }}");
-
-      /* ✅ Fallback si image absente */
       background-color: #f3f6fb;
-
       background-size: cover;
       background-attachment: fixed;
       background-position: center;
       background-repeat: no-repeat;
-
       color:#1b1b1b;
       margin:0;
       padding: 22px;
@@ -153,6 +147,7 @@
       color: #5a2f00;
       font-weight: 600;
       line-height: 1.35;
+      white-space: pre-wrap;
     }
 
     .plot-wrap{
@@ -164,7 +159,6 @@
       background: rgba(255,255,255,0.90);
     }
 
-    /* Form */
     form{
       display:grid;
       grid-template-columns: 1fr;
@@ -224,7 +218,6 @@
       opacity: .8;
     }
 
-    /* Prediction */
     .prediction h3{
       margin: 0 0 10px 0;
       color: var(--primary);
@@ -243,7 +236,6 @@
     .badge.warn{ color: var(--warn); border-color: rgba(230,81,0,0.20); background: rgba(230,81,0,0.08); }
     .badge.err{ color: var(--danger); border-color: rgba(183,28,28,0.20); background: rgba(183,28,28,0.08); }
 
-    /* Table */
     table{
       width:100%;
       border-collapse: collapse;
@@ -267,12 +259,8 @@
       top: 0;
       z-index: 1;
     }
-    tr:nth-child(even) td{
-      background: rgba(13,71,161,0.04);
-    }
-    tr:hover td{
-      background: rgba(13,71,161,0.10);
-    }
+    tr:nth-child(even) td{ background: rgba(13,71,161,0.04); }
+    tr:hover td{ background: rgba(13,71,161,0.10); }
 
     #loading-message{
       display:none;
@@ -296,20 +284,18 @@
     <header>
       <div class="title">
         <h1>🛒 Duel Expert – Product Categorization</h1>
-        <p class="subtitle">Domain Expert (XLM-R) + affichage métriques & prédictions (Render-safe)</p>
+        <p class="subtitle">Render UI (proxy) → Hugging Face API</p>
       </div>
 
       <div class="pill">
         ✅ Status :
-        {% if llm_msg %}
-          <span>{{ llm_msg }}</span>
-        {% else %}
-          <span>Ready</span>
-        {% endif %}
+        <span id="statusText">
+          {% if llm_msg %}{{ llm_msg }}{% else %}Ready{% endif %}
+        </span>
       </div>
     </header>
 
-    <!-- METRICS -->
+    <!-- METRICS (optionnels: si tu les envoies depuis Flask) -->
     <div class="grid">
       <div class="card">
         <h2>📊 Domain Expert Metrics</h2>
@@ -323,160 +309,157 @@
             <li class="metric"><span class="k">F1 (Macro)</span><span class="v">{{ domain_metrics['f1']|round(4) }}</span></li>
           </ul>
         {% else %}
-          <div class="warn">
-            ⚠️ Metrics Domain Expert non disponibles.<br>
-            Vérifie que <code>data/domain_expert_phase2_top10_predictions_full.csv</code> est bien présent et a les colonnes attendues.
-          </div>
+          <div class="warn">ℹ️ Metrics non chargées (normal si Render ne lit plus les CSV).</div>
         {% endif %}
       </div>
 
       <div class="card">
-        <h2>📊 Duel Expert Metrics</h2>
-
-        {% if duel_metrics %}
-          <ul class="metrics-list">
-            <li class="metric"><span class="k">Accuracy</span><span class="v">{{ duel_metrics['accuracy']|round(4) }}</span></li>
-            <li class="metric"><span class="k">Top-10 Accuracy</span><span class="v">{{ duel_metrics['top10_acc']|round(4) }}</span></li>
-            <li class="metric"><span class="k">Precision (Macro)</span><span class="v">{{ duel_metrics['precision']|round(4) }}</span></li>
-            <li class="metric"><span class="k">Recall (Macro)</span><span class="v">{{ duel_metrics['recall']|round(4) }}</span></li>
-            <li class="metric"><span class="k">F1 (Macro)</span><span class="v">{{ duel_metrics['f1']|round(4) }}</span></li>
-          </ul>
-        {% else %}
-          <div class="warn">
-            ⚠️ Metrics Duel Expert non disponibles.<br>
-            Vérifie que <code>data/duel_expert_mistral_GENERAL_EXPERT_top10_corrected.csv</code> est bien présent et a les colonnes attendues.
-          </div>
-        {% endif %}
+        <h2>🧪 Test API</h2>
+        <div class="actions">
+          <button type="button" id="btnPing">Tester /api/ping</button>
+          <button type="button" id="btnHealth">Tester /api/health</button>
+          <button type="button" id="btnHealthModel">Tester /api/health_model</button>
+        </div>
+        <div id="apiTestOut" class="warn" style="margin-top:10px; display:none;"></div>
       </div>
     </div>
 
-    <!-- PLOTLY -->
-    {% if plot_html %}
-      <div class="plot-wrap">
-        {{ plot_html|safe }}
-      </div>
-    {% else %}
-      <div class="card">
-        <div class="warn">⚠️ Plot indisponible (métriques manquantes ou CSV non chargé).</div>
-      </div>
-    {% endif %}
-
-    <!-- FORMULAIRE -->
+    <!-- FORMULAIRE (⚠️ on empêche le POST HTML) -->
     <div class="card" style="margin-top:16px;">
-      <h2>📝 Prédiction d'un nouveau produit, image ou CSV</h2>
+      <h2>📝 Prédiction d'un produit (texte)</h2>
 
-      <form id="predict-form" method="post" enctype="multipart/form-data">
+      <form id="predict-form">
         <div class="row">
           <div>
             <label>Texte produit</label>
-            <input type="text" name="product_text" placeholder="Entrez la description du produit">
-            <div class="hint">Astuce: colle une phrase complète (marque, matière, usage…)</div>
+            <input id="product_text" type="text" name="product_text" placeholder="Entrez la description du produit (ex: iphone 14)">
+            <div class="hint">Le bouton va appeler <code>/api/predict</code> (JSON) et afficher la catégorie.</div>
           </div>
           <div>
-            <label>Fichier CSV (colonne: text ou description)</label>
-            <input type="file" name="csv_file" accept=".csv">
-            <div class="hint">Séparateur conseillé: ; (comme tes CSV Auchan)</div>
+            <label>K (top-k)</label>
+            <input id="k_value" type="text" name="k" value="10">
+            <div class="hint">10 recommandé</div>
           </div>
         </div>
 
-        <div class="row">
-          <div>
-            <label>Image produit (optionnel)</label>
-            <input type="file" name="product_image" accept="image/*">
-            <div class="hint">Note: si tu n’as pas encore le modèle image→texte, ça restera un placeholder.</div>
-          </div>
-
-          <div class="actions">
-            <input type="submit" value="🚀 Prédire">
-            {% if elapsed_time is not none %}
-              <span class="badge ok">⏱ {{ elapsed_time }}s</span>
-            {% endif %}
-          </div>
+        <div class="actions" style="margin-top:10px;">
+          <input type="submit" value="🚀 Catégoriser">
+          <button type="button" id="btnClear">Effacer</button>
         </div>
       </form>
 
       <div id="loading-message">⏳ Chargement / prédiction… veuillez patienter !</div>
+      <div id="error-message" class="warn" style="display:none;"></div>
 
-      {% if prediction_results %}
-        <div class="prediction" style="margin-top:14px;">
-          <h3>Résultat</h3>
-
-          {% if prediction_results|length == 1 %}
-            <p><span class="badge ok">Top-1 Domain</span> {{ prediction_results[0]['top1'] }}</p>
-            <p><span class="badge ok">Final</span> {{ prediction_results[0]['final'] }}</p>
-          {% else %}
-            <p><strong>{{ prediction_results|length }} produits prédits</strong></p>
-            <table>
-              <tr>
-                <th>#</th>
-                <th>Description</th>
-                <th>Top-1 Domain</th>
-                <th>Top-10 Domain</th>
-                <th>Final</th>
-              </tr>
-              {% for p in prediction_results %}
-                <tr>
-                  <td>{{ loop.index }}</td>
-                  <td>{{ p['text'][:150] }}{% if p['text']|length > 150 %}...{% endif %}</td>
-                  <td>{{ p['top1'] }}</td>
-                  <td>
-                    {% if p['top10'] %}
-                      {{ p['top10'][:10] }}
-                    {% else %}
-                      -
-                    {% endif %}
-                  </td>
-                  <td>{{ p['final'] }}</td>
-                </tr>
-              {% endfor %}
-            </table>
-          {% endif %}
-        </div>
-      {% endif %}
-    </div>
-
-    <!-- TABLE EXEMPLE -->
-    <div class="card" style="margin-top:16px;">
-      <h2>📦 Exemple de 10 premiers produits</h2>
-
-      {% if products and products|length > 0 %}
-        <table>
-          <tr>
-            <th>#</th>
-            <th>Description</th>
-            <th>Top-1 Domain</th>
-            <th>Top-10 Domain</th>
-            <th>Final</th>
-            <th>Vrai label</th>
-          </tr>
-          {% for p in products %}
-            <tr>
-              <td>{{ loop.index }}</td>
-              <td>{{ (p.get('description', '') or p.get('text',''))[:150] }}{% if (p.get('description','') or p.get('text',''))|length > 150 %}...{% endif %}</td>
-              <td>{{ p.get('top1_pred','-') }}</td>
-              <td>
-                {% if p.get('top10_preds') %}
-                  {{ p.get('top10_preds')[:10] }}
-                {% else %}
-                  -
-                {% endif %}
-              </td>
-              <td>{{ p.get('final_duel_pred','-') }}</td>
-              <td>{{ p.get('true_label','-') }}</td>
-            </tr>
-          {% endfor %}
-        </table>
-      {% else %}
-        <div class="warn">⚠️ Aucun produit exemple à afficher (CSV duel non chargé).</div>
-      {% endif %}
+      <div class="prediction" style="margin-top:14px;">
+        <h3>Résultat</h3>
+        <p><span class="badge ok">Catégorie finale</span> <span id="finalCat">-</span></p>
+        <p><span class="badge ok">Confiance</span> <span id="confVal">-</span></p>
+        <p><span class="badge ok">Top-10</span></p>
+        <pre id="top10List" style="white-space:pre-wrap; background:#fff; border:1px solid rgba(0,0,0,0.1); padding:10px; border-radius:12px;">-</pre>
+      </div>
     </div>
   </div>
 
   <script>
-    document.getElementById("predict-form").addEventListener("submit", function() {
-      var el = document.getElementById("loading-message");
-      if (el) el.style.display = "block";
+    const loadingEl = document.getElementById("loading-message");
+    const errEl = document.getElementById("error-message");
+
+    function showLoading(on){
+      loadingEl.style.display = on ? "block" : "none";
+    }
+    function showError(msg){
+      errEl.style.display = msg ? "block" : "none";
+      errEl.textContent = msg || "";
+    }
+
+    async function safeJson(res){
+      const txt = await res.text();
+      if(!txt.trim()){
+        return { ok:false, error:"Empty response body", http_status: res.status };
+      }
+      try{
+        return JSON.parse(txt);
+      }catch(e){
+        return { ok:false, error:"Response is not JSON", http_status: res.status, raw: txt.slice(0,400) };
+      }
+    }
+
+    document.getElementById("btnClear").addEventListener("click", () => {
+      document.getElementById("product_text").value = "";
+      document.getElementById("k_value").value = "10";
+      document.getElementById("finalCat").textContent = "-";
+      document.getElementById("confVal").textContent = "-";
+      document.getElementById("top10List").textContent = "-";
+      showError("");
     });
+
+    // ✅ on empêche le POST HTML
+    document.getElementById("predict-form").addEventListener("submit", async function(e) {
+      e.preventDefault();
+
+      showError("");
+      showLoading(true);
+
+      const text = (document.getElementById("product_text").value || "").trim();
+      const kRaw = (document.getElementById("k_value").value || "10").trim();
+      const k = parseInt(kRaw, 10) || 10;
+
+      if(!text){
+        showLoading(false);
+        showError("Veuillez entrer une description produit.");
+        return;
+      }
+
+      try{
+        const res = await fetch("/api/predict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, k })
+        });
+
+        const data = await safeJson(res);
+
+        if(!res.ok || !data.ok){
+          const msg = (data && (data.error || data.message)) ? (data.error || data.message) : ("HTTP " + res.status);
+          showError("Erreur API: " + msg + (data.raw ? ("\n" + data.raw) : ""));
+          showLoading(false);
+          return;
+        }
+
+        // ✅ format attendu depuis ton app.py proxy
+        document.getElementById("finalCat").textContent = data.final_category || data.top1 || "-";
+        document.getElementById("confVal").textContent = (data.conf !== undefined && data.conf !== null) ? data.conf : "-";
+        document.getElementById("top10List").textContent = JSON.stringify(data.top10 || [], null, 2);
+
+      }catch(err){
+        showError("Erreur réseau: " + err.message);
+      }finally{
+        showLoading(false);
+      }
+    });
+
+    async function testApi(path, outId){
+      const out = document.getElementById(outId);
+      out.style.display = "block";
+      out.textContent = "⏳ ...";
+
+      try{
+        const res = await fetch(path);
+        const data = await safeJson(res);
+        if(!res.ok || !data.ok){
+          out.textContent = "❌ " + (data.error || ("HTTP " + res.status)) + (data.raw ? ("\n" + data.raw) : "");
+          return;
+        }
+        out.textContent = "✅ OK\n" + JSON.stringify(data, null, 2);
+      }catch(e){
+        out.textContent = "❌ Network error: " + e.message;
+      }
+    }
+
+    document.getElementById("btnPing").addEventListener("click", () => testApi("/api/ping", "apiTestOut"));
+    document.getElementById("btnHealth").addEventListener("click", () => testApi("/api/health", "apiTestOut"));
+    document.getElementById("btnHealthModel").addEventListener("click", () => testApi("/api/health_model", "apiTestOut"));
   </script>
 </body>
 </html>
