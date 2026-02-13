@@ -1,14 +1,33 @@
-# app.py (Render UI -> proxy to HF Space API)
+# app.py (Render UI -> proxy to HF Space API) ✅ ROBUST
+
+import os
+import traceback
+import requests
 
 from flask import Flask, render_template, request, jsonify
 from werkzeug.exceptions import HTTPException
-import os, traceback
-import requests
 
 app = Flask(__name__)
 
+# Upstream HF Space base URL
 DOMAIN_API_BASE = os.getenv("DOMAIN_API_BASE", "https://bineta123-domainexpert-api.hf.space").rstrip("/")
 REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "30"))
+
+# ----------------------------
+# CORS (simple + enough)
+# ----------------------------
+@app.after_request
+def add_cors_headers(resp):
+    # allow calling from your own domain / browser
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    return resp
+
+@app.route("/api/<path:_>", methods=["OPTIONS"])
+def preflight(_):
+    # reply OK to preflight
+    return ("", 204)
 
 # ----------------------------
 # ALWAYS JSON FOR /api/*
@@ -34,19 +53,20 @@ def handle_any_exception(e):
         }), 500
     raise e
 
-
 # ----------------------------
-# Helpers
+# Helper: call upstream HF API
 # ----------------------------
 def call_domain_api(method: str, path: str, json_body=None, params=None):
     url = f"{DOMAIN_API_BASE}{path}"
+
     try:
         r = requests.request(
             method=method,
             url=url,
             json=json_body,
             params=params,
-            timeout=REQUEST_TIMEOUT
+            timeout=REQUEST_TIMEOUT,
+            headers={"Accept": "application/json"},
         )
     except requests.RequestException as e:
         return None, {
@@ -55,7 +75,7 @@ def call_domain_api(method: str, path: str, json_body=None, params=None):
             "upstream": url
         }, 502
 
-    # Toujours essayer JSON, sinon renvoyer texte
+    # Try JSON; if not JSON, return preview
     try:
         data = r.json()
         return data, None, r.status_code
@@ -65,46 +85,41 @@ def call_domain_api(method: str, path: str, json_body=None, params=None):
             "error": "UpstreamNotJSON",
             "upstream": url,
             "status_code": r.status_code,
-            "text_preview": (r.text or "")[:300]
+            "text_preview": (r.text or "")[:400]
         }, 502
-
 
 # ----------------------------
 # Pages (UI)
 # ----------------------------
-@app.route("/")
+@app.route("/", methods=["GET"])
 def home():
-    # si tu as déjà un template, garde-le
-    # sinon tu peux mettre une simple page
+    # If you have your template, keep it
     return render_template("domain_expert.html")
-
 
 # ----------------------------
 # API routes expected by your frontend
 # ----------------------------
-@app.route("/api/ping")
+@app.route("/api/ping", methods=["GET"])
 def api_ping():
     data, err, code = call_domain_api("GET", "/ping")
     if err:
         return jsonify(err), code
-    return jsonify({"ok": True, "upstream": data}), 200
+    # return same as upstream, but wrap
+    return jsonify({"ok": True, "upstream": data}), code
 
-
-@app.route("/api/health")
+@app.route("/api/health", methods=["GET"])
 def api_health():
     data, err, code = call_domain_api("GET", "/health")
     if err:
         return jsonify(err), code
-    return jsonify({"ok": True, "upstream": data}), 200
+    return jsonify({"ok": True, "upstream": data}), code
 
-
-@app.route("/api/health_model")
+@app.route("/api/health_model", methods=["GET"])
 def api_health_model():
     data, err, code = call_domain_api("GET", "/health_model")
     if err:
         return jsonify(err), code
-    return jsonify({"ok": True, "upstream": data}), 200
-
+    return jsonify({"ok": True, "upstream": data}), code
 
 @app.route("/api/predict", methods=["POST"])
 def api_predict():
@@ -115,21 +130,32 @@ def api_predict():
     if not text:
         return jsonify({"ok": False, "error": "Missing 'text'"}), 400
 
-    data, err, code = call_domain_api("POST", "/predict", json_body={"text": text, "k": int(k)})
-    if err:
-        return jsonify(err), code
+    # forward to HF
+    upstream_data, err, status = call_domain_api(
+        "POST",
+        "/predict",
+        json_body={"text": text, "k": int(k)}
+    )
 
-    # Normalize output to what your frontend expects
-    # HF returns: {"ok": True, "top1": ..., "conf": ..., "topk": [...]}
-    if isinstance(data, dict) and data.get("ok") is True:
+    if err:
+        return jsonify(err), status
+
+    # Upstream should be like: {"ok": True, "top1": ..., "conf": ..., "topk": [...]}
+    if isinstance(upstream_data, dict) and upstream_data.get("ok") is True:
         return jsonify({
             "ok": True,
-            "top1": data.get("top1"),
-            "conf": data.get("conf"),
-            "top10": data.get("topk", [])  # keep same naming as your old UI
+            "top1": upstream_data.get("top1"),
+            "conf": upstream_data.get("conf"),
+            "top10": upstream_data.get("topk", []),
         }), 200
 
-    return jsonify({"ok": False, "error": "Bad upstream response", "upstream": data}), 502
+    # If upstream returned structured error
+    return jsonify({
+        "ok": False,
+        "error": "Bad upstream response",
+        "upstream_status": status,
+        "upstream": upstream_data
+    }), 502
 
 
 if __name__ == "__main__":
