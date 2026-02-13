@@ -17,9 +17,7 @@
       --warn:#e65100;
       --ok:#1b5e20;
     }
-
     *{ box-sizing: border-box; }
-
     body{
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       background-image: url("{{ background_image_url }}");
@@ -32,247 +30,66 @@
       margin:0;
       padding: 22px;
     }
+    .overlay{ position: fixed; inset: 0; background: rgba(255,255,255,0.15); backdrop-filter: blur(2px); z-index: -1; }
+    .container{ max-width: 900px; margin: 0 auto; }
+    header{ display:flex; align-items:center; justify-content:space-between; gap: 12px; margin-bottom: 18px; }
+    .title{ display:flex; flex-direction:column; gap: 4px; }
+    h1{ margin:0; font-size: 26px; color: var(--primary); text-shadow: 1px 1px 2px #ffffffaa; }
+    .subtitle{ margin:0; color:#2d2d2d; opacity:.85; font-size: 14px; }
+    .pill{ display:inline-flex; align-items:center; gap:8px; padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,0.85); border: 1px solid var(--border); box-shadow: 0 6px 18px rgba(0,0,0,0.08); font-weight: 700; font-size: 13px; color: #123; white-space: nowrap; }
 
-    .overlay{
-      position: fixed;
-      inset: 0;
-      background: rgba(255,255,255,0.15);
-      backdrop-filter: blur(2px);
-      z-index: -1;
-    }
-
-    .container{
-      max-width: 1100px;
-      margin: 0 auto;
-    }
-
-    header{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap: 12px;
-      margin-bottom: 18px;
-    }
-
-    .title{
-      display:flex;
-      flex-direction:column;
-      gap: 4px;
-    }
-
-    h1{
-      margin:0;
-      font-size: 28px;
-      color: var(--primary);
-      text-shadow: 1px 1px 2px #ffffffaa;
-      letter-spacing: .2px;
-    }
-
-    .subtitle{
-      margin:0;
-      color:#2d2d2d;
-      opacity:.85;
-      font-size: 14px;
-    }
-
-    .pill{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      padding: 8px 12px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.85);
-      border: 1px solid var(--border);
-      box-shadow: 0 6px 18px rgba(0,0,0,0.08);
-      font-weight: 600;
-      font-size: 13px;
-      color: #123;
-      white-space: nowrap;
-    }
-
-    .grid{
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-bottom: 16px;
-    }
-
-    .card{
-      background: var(--bg);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      border: 1px solid var(--border);
-      padding: 18px;
-    }
-
-    .card h2{
-      margin: 0 0 10px 0;
-      font-size: 18px;
-      color: var(--primary);
-    }
-
-    .metrics-list{
-      margin:0;
-      padding:0;
-      list-style:none;
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px 14px;
-    }
-
-    .metric{
-      padding: 10px 12px;
-      border-radius: 14px;
-      background: rgba(13,71,161,0.06);
-      border: 1px solid rgba(13,71,161,0.10);
-    }
-
-    .metric .k{
-      display:block;
-      font-size: 12px;
-      opacity: .8;
-      margin-bottom: 4px;
-    }
-    .metric .v{
-      font-weight: 800;
-      font-size: 16px;
-      color:#102a43;
-    }
-
-    .warn{
-      padding: 12px 14px;
-      border-radius: 14px;
-      background: rgba(230,81,0,0.10);
-      border: 1px solid rgba(230,81,0,0.22);
-      color: #5a2f00;
-      font-weight: 600;
-      line-height: 1.35;
-      white-space: pre-wrap;
-    }
-
-    .plot-wrap{
-      margin-top: 12px;
-      border-radius: var(--radius);
-      overflow:hidden;
-      border: 1px solid rgba(0,0,0,0.08);
-      box-shadow: 0 10px 25px rgba(0,0,0,0.10);
-      background: rgba(255,255,255,0.90);
-    }
-
-    form{
-      display:grid;
-      grid-template-columns: 1fr;
-      gap: 10px;
-      margin-top: 10px;
-    }
-
-    .row{
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-
-    label{
-      font-weight: 700;
-      font-size: 13px;
-      color:#183153;
-      margin-bottom: 6px;
-      display:block;
-    }
-
-    input[type="text"], input[type="file"]{
+    .card{ background: var(--bg); border-radius: var(--radius); box-shadow: var(--shadow); border: 1px solid var(--border); padding: 18px; }
+    .label{ font-weight: 800; font-size: 13px; color:#183153; margin-bottom: 8px; display:block; }
+    textarea{
       width: 100%;
-      padding: 11px 12px;
-      border-radius: 12px;
+      min-height: 110px;
+      padding: 12px;
+      border-radius: 14px;
       border: 1px solid rgba(0,0,0,0.15);
       background: rgba(255,255,255,0.95);
       outline:none;
+      resize: vertical;
+      font-size: 14px;
     }
 
-    .actions{
-      display:flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      align-items:center;
-    }
-
-    button, input[type="submit"]{
+    .actions{ display:flex; gap: 10px; flex-wrap: wrap; align-items:center; margin-top: 10px; }
+    button{
       padding: 11px 16px;
       background: linear-gradient(90deg, var(--primary2), #42a5f5);
       color:white;
       border: none;
       border-radius: 14px;
       cursor:pointer;
-      font-weight: 800;
+      font-weight: 900;
       transition: transform .08s ease, opacity .15s ease;
       box-shadow: 0 10px 22px rgba(30,136,229,0.22);
     }
-
-    button:active, input[type="submit"]:active{
-      transform: translateY(1px);
-      opacity:.95;
-    }
-
-    .hint{
-      font-size: 12px;
-      opacity: .8;
-    }
-
-    .prediction h3{
-      margin: 0 0 10px 0;
+    button:active{ transform: translateY(1px); opacity:.95; }
+    button.secondary{
+      background: rgba(13,71,161,0.08);
       color: var(--primary);
+      border: 1px solid rgba(13,71,161,0.25);
+      box-shadow: none;
     }
 
-    .badge{
-      display:inline-block;
-      padding: 6px 10px;
-      border-radius: 999px;
-      font-weight: 800;
-      font-size: 12px;
-      border: 1px solid rgba(0,0,0,0.10);
-      background: rgba(255,255,255,0.90);
-    }
-    .badge.ok{ color: var(--ok); border-color: rgba(27,94,32,0.20); background: rgba(27,94,32,0.08); }
-    .badge.warn{ color: var(--warn); border-color: rgba(230,81,0,0.20); background: rgba(230,81,0,0.08); }
-    .badge.err{ color: var(--danger); border-color: rgba(183,28,28,0.20); background: rgba(183,28,28,0.08); }
+    .status{ margin-top: 10px; font-weight: 900; }
+    .status.ok{ color: var(--ok); }
+    .status.err{ color: var(--danger); }
+    .status.warn{ color: var(--warn); }
 
-    table{
-      width:100%;
-      border-collapse: collapse;
+    .result{
       margin-top: 12px;
-      overflow:hidden;
+      padding: 12px 14px;
       border-radius: 14px;
       border: 1px solid rgba(0,0,0,0.10);
-      background: rgba(255,255,255,0.95);
+      background: rgba(255,255,255,0.9);
+      line-height: 1.35;
     }
-    th, td{
-      border-bottom: 1px solid rgba(0,0,0,0.08);
-      padding: 10px 10px;
-      text-align:left;
-      vertical-align: top;
-      font-size: 13px;
-    }
-    th{
-      background: rgba(13,71,161,0.95);
-      color:white;
-      position: sticky;
-      top: 0;
-      z-index: 1;
-    }
-    tr:nth-child(even) td{ background: rgba(13,71,161,0.04); }
-    tr:hover td{ background: rgba(13,71,161,0.10); }
-
-    #loading-message{
-      display:none;
-      margin-top: 10px;
-      font-weight: 800;
-      color: var(--warn);
-    }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; white-space: pre-wrap; }
 
     @media(max-width: 900px){
-      .grid{ grid-template-columns: 1fr; }
-      .row{ grid-template-columns: 1fr; }
       body{ padding: 14px; }
+      header{ flex-direction: column; align-items: flex-start; }
     }
   </style>
 </head>
@@ -284,182 +101,144 @@
     <header>
       <div class="title">
         <h1>🛒 Duel Expert – Product Categorization</h1>
-        <p class="subtitle">Render UI (proxy) → Hugging Face API</p>
+        <p class="subtitle">Render UI → appelle ton API /api/* (proxy vers Hugging Face Space)</p>
       </div>
-
-      <div class="pill">
-        ✅ Status :
-        <span id="statusText">
-          {% if llm_msg %}{{ llm_msg }}{% else %}Ready{% endif %}
-        </span>
-      </div>
+      <div class="pill" id="pill">⏳ Status : checking…</div>
     </header>
 
-    <!-- METRICS (optionnels: si tu les envoies depuis Flask) -->
-    <div class="grid">
-      <div class="card">
-        <h2>📊 Domain Expert Metrics</h2>
+    <div class="card">
+      <label class="label">Playground (texte)</label>
+      <textarea id="inputText" placeholder="Colle une description produit… (ex: iPhone 14 128Go noir)"></textarea>
 
-        {% if domain_metrics %}
-          <ul class="metrics-list">
-            <li class="metric"><span class="k">Accuracy</span><span class="v">{{ domain_metrics['accuracy']|round(4) }}</span></li>
-            <li class="metric"><span class="k">Top-10 Accuracy</span><span class="v">{{ domain_metrics['top10_acc']|round(4) }}</span></li>
-            <li class="metric"><span class="k">Precision (Macro)</span><span class="v">{{ domain_metrics['precision']|round(4) }}</span></li>
-            <li class="metric"><span class="k">Recall (Macro)</span><span class="v">{{ domain_metrics['recall']|round(4) }}</span></li>
-            <li class="metric"><span class="k">F1 (Macro)</span><span class="v">{{ domain_metrics['f1']|round(4) }}</span></li>
-          </ul>
-        {% else %}
-          <div class="warn">ℹ️ Metrics non chargées (normal si Render ne lit plus les CSV).</div>
-        {% endif %}
+      <div class="actions">
+        <button class="secondary" id="btnResult">Résultat = catégorie finale</button>
+        <button id="btnPredict">Catégoriser</button>
+        <button class="secondary" id="btnClear">Effacer</button>
       </div>
 
-      <div class="card">
-        <h2>🧪 Test API</h2>
-        <div class="actions">
-          <button type="button" id="btnPing">Tester /api/ping</button>
-          <button type="button" id="btnHealth">Tester /api/health</button>
-          <button type="button" id="btnHealthModel">Tester /api/health_model</button>
-        </div>
-        <div id="apiTestOut" class="warn" style="margin-top:10px; display:none;"></div>
-      </div>
-    </div>
+      <div id="msg" class="status"></div>
 
-    <!-- FORMULAIRE (⚠️ on empêche le POST HTML) -->
-    <div class="card" style="margin-top:16px;">
-      <h2>📝 Prédiction d'un produit (texte)</h2>
-
-      <form id="predict-form">
-        <div class="row">
-          <div>
-            <label>Texte produit</label>
-            <input id="product_text" type="text" name="product_text" placeholder="Entrez la description du produit (ex: iphone 14)">
-            <div class="hint">Le bouton va appeler <code>/api/predict</code> (JSON) et afficher la catégorie.</div>
-          </div>
-          <div>
-            <label>K (top-k)</label>
-            <input id="k_value" type="text" name="k" value="10">
-            <div class="hint">10 recommandé</div>
-          </div>
-        </div>
-
-        <div class="actions" style="margin-top:10px;">
-          <input type="submit" value="🚀 Catégoriser">
-          <button type="button" id="btnClear">Effacer</button>
-        </div>
-      </form>
-
-      <div id="loading-message">⏳ Chargement / prédiction… veuillez patienter !</div>
-      <div id="error-message" class="warn" style="display:none;"></div>
-
-      <div class="prediction" style="margin-top:14px;">
-        <h3>Résultat</h3>
-        <p><span class="badge ok">Catégorie finale</span> <span id="finalCat">-</span></p>
-        <p><span class="badge ok">Confiance</span> <span id="confVal">-</span></p>
-        <p><span class="badge ok">Top-10</span></p>
-        <pre id="top10List" style="white-space:pre-wrap; background:#fff; border:1px solid rgba(0,0,0,0.1); padding:10px; border-radius:12px;">-</pre>
+      <div class="result" id="resultBox" style="display:none;">
+        <div><b>Catégorie finale :</b> <span id="finalCat">-</span></div>
+        <div><b>Confiance :</b> <span id="conf">-</span></div>
+        <div style="margin-top:8px;"><b>Top-10 :</b></div>
+        <div class="mono" id="top10">-</div>
+        <div style="margin-top:10px; opacity:.85;"><b>Debug (si erreur) :</b></div>
+        <div class="mono" id="debug">-</div>
       </div>
     </div>
   </div>
 
   <script>
-    const loadingEl = document.getElementById("loading-message");
-    const errEl = document.getElementById("error-message");
+    const pill = document.getElementById("pill");
+    const msg = document.getElementById("msg");
+    const resultBox = document.getElementById("resultBox");
+    const finalCat = document.getElementById("finalCat");
+    const conf = document.getElementById("conf");
+    const top10 = document.getElementById("top10");
+    const debug = document.getElementById("debug");
+    const inputText = document.getElementById("inputText");
 
-    function showLoading(on){
-      loadingEl.style.display = on ? "block" : "none";
-    }
-    function showError(msg){
-      errEl.style.display = msg ? "block" : "none";
-      errEl.textContent = msg || "";
+    function setMsg(text, kind="") {
+      msg.className = "status " + (kind || "");
+      msg.textContent = text || "";
     }
 
-    async function safeJson(res){
-      const txt = await res.text();
-      if(!txt.trim()){
-        return { ok:false, error:"Empty response body", http_status: res.status };
+    async function safeFetchJson(url, options) {
+      const res = await fetch(url, options);
+      const contentType = (res.headers.get("content-type") || "").toLowerCase();
+      const text = await res.text(); // on lit d'abord le texte (évite "unexpected end")
+      let data = null;
+
+      if (text && contentType.includes("application/json")) {
+        try { data = JSON.parse(text); } catch(e) { /* ignore */ }
       }
-      try{
-        return JSON.parse(txt);
-      }catch(e){
-        return { ok:false, error:"Response is not JSON", http_status: res.status, raw: txt.slice(0,400) };
+
+      return { res, text, data, contentType };
+    }
+
+    async function checkPing() {
+      try {
+        const { res, text, data } = await safeFetchJson("/api/ping", { method: "GET" });
+        if (!res.ok) {
+          pill.textContent = "❌ Status : /api/ping error " + res.status;
+          return;
+        }
+        // accepte soit un JSON direct, soit un wrapper
+        const ok = (data && (data.ok === true || data.msg === "pong")) || (text && text.includes("pong"));
+        pill.textContent = ok ? "✅ Status : Ready" : "⚠️ Status : Ping reçu mais format étrange";
+      } catch (e) {
+        pill.textContent = "❌ Status : ping failed";
       }
     }
 
-    document.getElementById("btnClear").addEventListener("click", () => {
-      document.getElementById("product_text").value = "";
-      document.getElementById("k_value").value = "10";
-      document.getElementById("finalCat").textContent = "-";
-      document.getElementById("confVal").textContent = "-";
-      document.getElementById("top10List").textContent = "-";
-      showError("");
-    });
-
-    // ✅ on empêche le POST HTML
-    document.getElementById("predict-form").addEventListener("submit", async function(e) {
-      e.preventDefault();
-
-      showError("");
-      showLoading(true);
-
-      const text = (document.getElementById("product_text").value || "").trim();
-      const kRaw = (document.getElementById("k_value").value || "10").trim();
-      const k = parseInt(kRaw, 10) || 10;
-
-      if(!text){
-        showLoading(false);
-        showError("Veuillez entrer une description produit.");
+    async function doPredict() {
+      const text = (inputText.value || "").trim();
+      if (!text) {
+        setMsg("⚠️ Entre une description produit.", "warn");
         return;
       }
 
-      try{
-        const res = await fetch("/api/predict", {
+      setMsg("⏳ Prédiction en cours…", "warn");
+      resultBox.style.display = "none";
+      debug.textContent = "-";
+
+      try {
+        const body = JSON.stringify({ text: text, k: 10 });
+
+        const { res, text: raw, data, contentType } = await safeFetchJson("/api/predict", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, k })
+          body
         });
 
-        const data = await safeJson(res);
-
-        if(!res.ok || !data.ok){
-          const msg = (data && (data.error || data.message)) ? (data.error || data.message) : ("HTTP " + res.status);
-          showError("Erreur API: " + msg + (data.raw ? ("\n" + data.raw) : ""));
-          showLoading(false);
+        // Cas 1: OK + JSON
+        if (res.ok && data && data.ok === true) {
+          finalCat.textContent = data.top1 || data.final_category || "-";
+          conf.textContent = (data.conf !== undefined && data.conf !== null) ? data.conf : "-";
+          const arr = data.top10 || data.topk || [];
+          top10.textContent = Array.isArray(arr) ? JSON.stringify(arr, null, 2) : String(arr);
+          setMsg("✅ Prédiction OK", "ok");
+          resultBox.style.display = "block";
           return;
         }
 
-        // ✅ format attendu depuis ton app.py proxy
-        document.getElementById("finalCat").textContent = data.final_category || data.top1 || "-";
-        document.getElementById("confVal").textContent = (data.conf !== undefined && data.conf !== null) ? data.conf : "-";
-        document.getElementById("top10List").textContent = JSON.stringify(data.top10 || [], null, 2);
-
-      }catch(err){
-        showError("Erreur réseau: " + err.message);
-      }finally{
-        showLoading(false);
-      }
-    });
-
-    async function testApi(path, outId){
-      const out = document.getElementById(outId);
-      out.style.display = "block";
-      out.textContent = "⏳ ...";
-
-      try{
-        const res = await fetch(path);
-        const data = await safeJson(res);
-        if(!res.ok || !data.ok){
-          out.textContent = "❌ " + (data.error || ("HTTP " + res.status)) + (data.raw ? ("\n" + data.raw) : "");
+        // Cas 2: res OK mais pas JSON attendu
+        if (res.ok && !data) {
+          setMsg("❌ Réponse non-JSON (ton backend renvoie peut-être du HTML).", "err");
+          resultBox.style.display = "block";
+          debug.textContent =
+            "status=" + res.status + "\n" +
+            "content-type=" + contentType + "\n" +
+            "preview:\n" + (raw || "").slice(0, 600);
           return;
         }
-        out.textContent = "✅ OK\n" + JSON.stringify(data, null, 2);
-      }catch(e){
-        out.textContent = "❌ Network error: " + e.message;
+
+        // Cas 3: erreur HTTP avec JSON d'erreur
+        setMsg("❌ Erreur API (" + res.status + ")", "err");
+        resultBox.style.display = "block";
+        debug.textContent =
+          "status=" + res.status + "\n" +
+          "content-type=" + contentType + "\n" +
+          "json:\n" + (data ? JSON.stringify(data, null, 2) : "-") + "\n\n" +
+          "preview:\n" + (raw || "").slice(0, 600);
+
+      } catch (e) {
+        setMsg("❌ Exception JS: " + e.message, "err");
+        resultBox.style.display = "block";
+        debug.textContent = String(e);
       }
     }
 
-    document.getElementById("btnPing").addEventListener("click", () => testApi("/api/ping", "apiTestOut"));
-    document.getElementById("btnHealth").addEventListener("click", () => testApi("/api/health", "apiTestOut"));
-    document.getElementById("btnHealthModel").addEventListener("click", () => testApi("/api/health_model", "apiTestOut"));
+    document.getElementById("btnPredict").addEventListener("click", doPredict);
+    document.getElementById("btnClear").addEventListener("click", () => {
+      inputText.value = "";
+      setMsg("");
+      resultBox.style.display = "none";
+    });
+    document.getElementById("btnResult").addEventListener("click", doPredict);
+
+    checkPing();
   </script>
 </body>
 </html>
