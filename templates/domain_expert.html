@@ -2,7 +2,296 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" /><!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>🛒 Duel Expert – Product Categorization</title>
+
+  <style>
+    :root{
+      --primary:#0d47a1;
+      --primary2:#1e88e5;
+      --bg: rgba(255,255,255,0.92);
+      --shadow: 0 10px 25px rgba(0,0,0,0.12);
+      --radius: 18px;
+      --border: rgba(13,71,161,0.18);
+      --danger:#b71c1c;
+      --warn:#e65100;
+      --ok:#1b5e20;
+    }
+    *{ box-sizing: border-box; }
+
+    body{
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-image: url("{{ background_image_url }}");
+      background-color: #f3f6fb;
+      background-size: cover;
+      background-attachment: fixed;
+      background-position: center;
+      background-repeat: no-repeat;
+      color:#1b1b1b;
+      margin:0;
+      padding: 22px;
+    }
+
+    .overlay{ position: fixed; inset: 0; background: rgba(255,255,255,0.15); backdrop-filter: blur(2px); z-index: -1; }
+    .container{ max-width: 900px; margin: 0 auto; }
+
+    header{ display:flex; align-items:center; justify-content:space-between; gap: 12px; margin-bottom: 18px; }
+    .title{ display:flex; flex-direction:column; gap: 4px; }
+
+    h1{ margin:0; font-size: 26px; color: var(--primary); text-shadow: 1px 1px 2px #ffffffaa; }
+    .subtitle{ margin:0; color:#2d2d2d; opacity:.85; font-size: 14px; }
+
+    .pill{
+      display:inline-flex; align-items:center; gap:8px;
+      padding: 8px 12px; border-radius: 999px;
+      background: rgba(255,255,255,0.85);
+      border: 1px solid var(--border);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+      font-weight: 700; font-size: 13px; color: #123; white-space: nowrap;
+    }
+
+    .card{
+      background: var(--bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      padding: 18px;
+    }
+
+    .label{ font-weight: 800; font-size: 13px; color:#183153; margin-bottom: 8px; display:block; }
+
+    textarea{
+      width: 100%;
+      min-height: 110px;
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(0,0,0,0.15);
+      background: rgba(255,255,255,0.95);
+      outline:none;
+      resize: vertical;
+      font-size: 14px;
+    }
+
+    .actions{ display:flex; gap: 10px; flex-wrap: wrap; align-items:center; margin-top: 10px; }
+
+    button{
+      padding: 11px 16px;
+      background: linear-gradient(90deg, var(--primary2), #42a5f5);
+      color:white;
+      border: none;
+      border-radius: 14px;
+      cursor:pointer;
+      font-weight: 900;
+      transition: transform .08s ease, opacity .15s ease;
+      box-shadow: 0 10px 22px rgba(30,136,229,0.22);
+    }
+    button:active{ transform: translateY(1px); opacity:.95; }
+
+    button.secondary{
+      background: rgba(13,71,161,0.08);
+      color: var(--primary);
+      border: 1px solid rgba(13,71,161,0.25);
+      box-shadow: none;
+    }
+
+    .status{ margin-top: 10px; font-weight: 900; }
+    .status.ok{ color: var(--ok); }
+    .status.err{ color: var(--danger); }
+    .status.warn{ color: var(--warn); }
+
+    .result{
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(0,0,0,0.10);
+      background: rgba(255,255,255,0.9);
+      line-height: 1.35;
+    }
+
+    .mono{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+    }
+
+    .tiny{
+      margin-top: 8px;
+      font-size: 12px;
+      opacity: .85;
+    }
+
+    @media(max-width: 900px){
+      body{ padding: 14px; }
+      header{ flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="overlay"></div>
+
+  <div class="container">
+    <header>
+      <div class="title">
+        <h1>🛒 Duel Expert – Product Categorization</h1>
+        <p class="subtitle">Render UI → appelle ton API <code>/api/*</code> (proxy vers Hugging Face Space)</p>
+      </div>
+      <div class="pill" id="pill">⏳ Status : checking…</div>
+    </header>
+
+    <div class="card">
+      <label class="label">Playground (texte)</label>
+      <textarea id="inputText" placeholder="Colle une description produit… (ex: iPhone 14 128Go noir)"></textarea>
+
+      <div class="actions">
+        <button class="secondary" id="btnResult" type="button">Résultat = catégorie finale</button>
+        <button id="btnPredict" type="button">Catégoriser</button>
+        <button class="secondary" id="btnClear" type="button">Effacer</button>
+      </div>
+
+      <div id="msg" class="status"></div>
+
+      <div class="result" id="resultBox" style="display:none;">
+        <div><b>Catégorie finale :</b> <span id="finalCat">-</span></div>
+        <div><b>Confiance :</b> <span id="conf">-</span></div>
+
+        <div style="margin-top:8px;"><b>Top-10 :</b></div>
+        <div class="mono" id="top10">-</div>
+
+        <div class="tiny"><b>Debug (si erreur) :</b></div>
+        <div class="mono" id="debug">-</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const pill = document.getElementById("pill");
+    const msg = document.getElementById("msg");
+    const resultBox = document.getElementById("resultBox");
+    const finalCat = document.getElementById("finalCat");
+    const conf = document.getElementById("conf");
+    const top10 = document.getElementById("top10");
+    const debug = document.getElementById("debug");
+    const inputText = document.getElementById("inputText");
+
+    function setMsg(text, kind="") {
+      msg.className = "status " + (kind || "");
+      msg.textContent = text || "";
+    }
+
+    // ✅ IMPORTANT: ne jamais faire res.json() directement
+    // On lit TOUJOURS res.text() puis on essaie JSON.parse
+    async function safeFetchJson(url, options) {
+      const res = await fetch(url, options);
+
+      const contentType = (res.headers.get("content-type") || "").toLowerCase();
+      const raw = await res.text(); // <-- évite "Unexpected end of JSON input"
+
+      let data = null;
+      if (raw && raw.trim()) {
+        try { data = JSON.parse(raw); } catch (e) { data = null; }
+      }
+
+      return { res, raw, data, contentType };
+    }
+
+    function showResult({top1, confVal, top10Arr, debugText}) {
+      finalCat.textContent = top1 || "-";
+      conf.textContent = (confVal !== undefined && confVal !== null) ? String(confVal) : "-";
+      top10.textContent = Array.isArray(top10Arr) ? JSON.stringify(top10Arr, null, 2) : (top10Arr ? String(top10Arr) : "-");
+      debug.textContent = debugText || "-";
+      resultBox.style.display = "block";
+    }
+
+    async function checkPing() {
+      try {
+        const { res, raw, data } = await safeFetchJson("/api/ping", { method: "GET" });
+
+        if (!res.ok) {
+          pill.textContent = `❌ Status : /api/ping error ${res.status}`;
+          return;
+        }
+
+        // On accepte différents formats
+        const ok =
+          (data && (data.ok === true || data.msg === "pong")) ||
+          (typeof raw === "string" && raw.toLowerCase().includes("pong")) ||
+          (data && data.upstream && (data.upstream.ok === true || data.upstream.msg === "pong"));
+
+        pill.textContent = ok ? "✅ Status : Ready" : "⚠️ Status : Ping OK mais format inattendu";
+      } catch (e) {
+        pill.textContent = "❌ Status : ping failed";
+      }
+    }
+
+    async function doPredict() {
+      const text = (inputText.value || "").trim();
+
+      if (!text) {
+        setMsg("⚠️ Entre une description produit.", "warn");
+        return;
+      }
+
+      setMsg("⏳ Prédiction en cours…", "warn");
+      resultBox.style.display = "none";
+
+      try {
+        const { res, raw, data, contentType } = await safeFetchJson("/api/predict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, k: 10 })
+        });
+
+        // ✅ Cas OK
+        if (res.ok && data && data.ok === true) {
+          const top1 = data.top1 || data.final_category || "-";
+          const confVal = (data.conf !== undefined ? data.conf : (data.confidence !== undefined ? data.confidence : null));
+          const top10Arr = data.top10 || data.topk || [];
+
+          setMsg("✅ Prédiction OK", "ok");
+          showResult({ top1, confVal, top10Arr, debugText: "-" });
+          return;
+        }
+
+        // ❌ Si le backend renvoie HTML / vide / autre
+        const dbg =
+          `status=${res.status}\n` +
+          `content-type=${contentType}\n\n` +
+          `JSON parsed? ${data ? "yes" : "no"}\n\n` +
+          `RAW preview:\n${(raw || "").slice(0, 900)}`;
+
+        setMsg(`❌ Erreur API (${res.status}). Voir debug.`, "err");
+        showResult({ top1: "-", confVal: "-", top10Arr: "-", debugText: dbg });
+
+      } catch (e) {
+        setMsg("❌ Exception JS: " + e.message, "err");
+        showResult({ top1: "-", confVal: "-", top10Arr: "-", debugText: String(e) });
+      }
+    }
+
+    document.getElementById("btnPredict").addEventListener("click", doPredict);
+    document.getElementById("btnResult").addEventListener("click", doPredict);
+
+    document.getElementById("btnClear").addEventListener("click", () => {
+      inputText.value = "";
+      setMsg("");
+      resultBox.style.display = "none";
+    });
+
+    // Enter -> lancer
+    inputText.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") doPredict();
+    });
+
+    checkPing();
+  </script>
+</body>
+</html>
+
   <title>🛒 Duel Expert – Product Categorization</title>
 
   <style>
