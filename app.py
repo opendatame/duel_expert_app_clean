@@ -1,14 +1,9 @@
 # ================================
-# app.py – Duel Expert Flask App (Render-ready)
-# - CSV in /data (GitHub)
-# - HF .pth download (public or private)
-# - Adds /predict JSON endpoint to avoid "Unexpected end of JSON input"
-# - Adds /health_model debug endpoint
-# - Adds HF/Transformers cache dirs to reduce repeated downloads
+# app.py – Render-ready (robust)
 # ================================
 
 from flask import Flask, render_template, request, jsonify, url_for
-import os, time, ast, gc, shutil
+import os, time, ast, gc, shutil, threading
 import pandas as pd
 
 import torch
@@ -24,9 +19,8 @@ import plotly.io as pio
 from huggingface_hub import hf_hub_download
 from transformers import XLMRobertaTokenizerFast, XLMRobertaModel
 
-
 # ----------------------------
-# CONFIG & PATHS (portable)
+# CONFIG & PATHS
 # ----------------------------
 app = Flask(__name__)
 
@@ -36,48 +30,60 @@ DATA_DIR   = os.path.join(BASE_DIR, "data")
 MODEL_DIR  = os.path.join(BASE_DIR, "models")
 os.makedirs(MODEL_DIR, exist_ok=True)
 
-# ✅ Cache HF/Transformers locally (helps on Render)
+# ✅ HF/Transformers cache (reduces repeated downloads)
 HF_CACHE_DIR = os.path.join(BASE_DIR, ".hf_cache")
 os.makedirs(HF_CACHE_DIR, exist_ok=True)
 os.environ["HF_HOME"] = HF_CACHE_DIR
 os.environ["TRANSFORMERS_CACHE"] = HF_CACHE_DIR
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 
-# ✅ Render: static background image
+# ✅ Force CPU on Render (avoid any CUDA weirdness)
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+DEVICE = "cpu"
+
+# ✅ Background
 BACKGROUND_IMAGE_FILE = os.getenv("BACKGROUND_IMAGE_FILE", "imageeco.jpg")
 
-# ✅ CSV paths (you have /data in repo)
+# ✅ CSV paths
 DOMAIN_CSV = os.getenv("DOMAIN_CSV", os.path.join(DATA_DIR, "domain_expert_phase2_top10_predictions_full.csv"))
 DUEL_CSV   = os.getenv("DUEL_CSV",   os.path.join(DATA_DIR, "duel_expert_mistral_GENERAL_EXPERT_top10_corrected.csv"))
 GLOBAL_CSV = os.getenv("GLOBAL_CSV", os.path.join(DATA_DIR, "produits_nettoyes.csv"))
 
-# ✅ Local where we store downloaded .pth
+# ✅ Model local path
 PHASE2_CKPT = os.getenv("PHASE2_CKPT", os.path.join(MODEL_DIR, "domain_expert_flat.pth"))
 
-DEVICE  = "cuda" if torch.cuda.is_available() else "cpu"
+# ✅ Backbone (set in Render env if needed)
+BACKBONE_MODEL = os.getenv("BACKBONE_MODEL", "xlm-roberta-large")
+
 MAX_LEN = int(os.getenv("MAX_LEN", "160"))
 
 # ----------------------------
-# HF MODEL DOWNLOAD (.pth)
+# HF DOWNLOAD (.pth)
 # ----------------------------
 HF_REPO_ID  = os.getenv("HF_REPO_ID", "Bineta123/domain-expert-xlmr")
 HF_FILENAME = os.getenv("HF_FILENAME", "domain_expert_flat.pth")
-HF_TOKEN    = os.getenv("HF_TOKEN")  # if private, set as Render Secret. if public, can be None.
-
+HF_TOKEN    = os.getenv("HF_TOKEN")  # public => None OK
 
 def ensure_model_file(local_path: str):
-    """Download .pth from Hugging Face if missing/too small."""
+    """Download .pth from Hugging Face if missing or too small."""
     if os.path.exists(local_path):
         try:
-            if os.path.getsize(local_path) > 10_000_000:
-                print("[MODEL] already present:", local_path, "size=", os.path.getsize(local_path))
+            size = os.path.getsize(local_path)
+            if size > 1_000_000:  # 1MB minimal sanity
+                print("[MODEL] already present:", local_path, "size=", size)
                 return
         except Exception:
             pass
 
-    print("[MODEL] downloading .pth from Hugging Face...")
-    # token can be None for public repos
-    downloaded = hf_hub_download(repo_id=HF_REPO_ID, filename=HF_FILENAME, token=HF_TOKEN)
+    print("[MODEL] downloading .pth from HF:", HF_REPO_ID, HF_FILENAME)
+    downloaded = hf_hub_download(
+        repo_id=HF_REPO_ID,
+        filename=HF_FILENAME,
+        token=HF_TOKEN,
+        # avoid hanging forever
+        etag_timeout=60,
+        resume_download=True
+    )
 
     os.makedirs(os.path.dirname(local_path), exist_ok=True)
     shutil.copyfile(downloaded, local_path)
@@ -87,14 +93,12 @@ def ensure_model_file(local_path: str):
     except Exception:
         print("[MODEL] ✅ downloaded to:", local_path)
 
-
 # ----------------------------
-# SAFE CSV READER + NORMALIZE COLS
+# CSV helpers
 # ----------------------------
 def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = [str(c).replace("\ufeff", "").strip() for c in df.columns]
     return df
-
 
 def safe_read_csv(path: str):
     if not path or not os.path.exists(path):
@@ -108,36 +112,28 @@ def safe_read_csv(path: str):
     except Exception:
         pass
 
-    # try sniff
     try:
         df = pd.read_csv(path, sep=None, engine="python", on_bad_lines="skip")
-        df = normalize_columns(df)
-        if df.shape[1] > 0:
-            return df
+        return normalize_columns(df)
     except Exception as e:
         print("[CSV] sniff failed:", type(e).__name__, str(e))
 
     for sep in [";", ","]:
         try:
             df = pd.read_csv(path, sep=sep, on_bad_lines="skip")
-            df = normalize_columns(df)
-            if df.shape[1] > 0:
-                return df
+            return normalize_columns(df)
         except Exception as e:
             print("[CSV] read failed sep=", sep, type(e).__name__, str(e))
 
     return None
 
-
 # ----------------------------
-# DOMAIN EXPERT MODEL
+# MODEL
 # ----------------------------
 class DomainExpert(nn.Module):
-    def __init__(self, n_classes, dropout=0.3):
+    def __init__(self, n_classes, dropout=0.3, backbone="xlm-roberta-large"):
         super().__init__()
-        # ⚠️ large is heavy on Render Free. Keep if your checkpoint is large-based.
-        # If you switch to base, your .pth must match base.
-        self.xlm = XLMRobertaModel.from_pretrained("xlm-roberta-large")
+        self.xlm = XLMRobertaModel.from_pretrained(backbone)
         self.dropout = nn.Dropout(dropout)
         self.classifier = nn.Linear(self.xlm.config.hidden_size, n_classes)
 
@@ -146,14 +142,15 @@ class DomainExpert(nn.Module):
         cls = out.last_hidden_state[:, 0, :]
         return self.classifier(self.dropout(cls))
 
-
 # ----------------------------
-# LAZY GLOBALS (avoid heavy boot)
+# LAZY GLOBALS + LOCK (avoid double load on Render)
 # ----------------------------
 tokenizer = None
 le = None
 NUM_CLASSES = None
 model = None
+
+_model_lock = threading.Lock()
 
 df_domain = None
 df_duel = None
@@ -161,13 +158,11 @@ domain_metrics = None
 duel_metrics = None
 plot_metrics_html = None
 
-
 def load_tokenizer_if_needed():
     global tokenizer
     if tokenizer is None:
-        print("[LOAD] tokenizer xlm-roberta-large...")
-        tokenizer = XLMRobertaTokenizerFast.from_pretrained("xlm-roberta-large")
-
+        print("[LOAD] tokenizer:", BACKBONE_MODEL)
+        tokenizer = XLMRobertaTokenizerFast.from_pretrained(BACKBONE_MODEL)
 
 def load_label_encoder_if_needed():
     global le, NUM_CLASSES
@@ -189,7 +184,6 @@ def load_label_encoder_if_needed():
     NUM_CLASSES = len(le.classes_)
     print("[INIT] NUM_CLASSES:", NUM_CLASSES)
 
-
 def extract_state_dict(ckpt):
     if not isinstance(ckpt, dict):
         return ckpt
@@ -199,39 +193,40 @@ def extract_state_dict(ckpt):
         return ckpt["state_dict"]
     return ckpt
 
-
 def load_domain_expert_if_needed():
     global model
+
     if model is not None:
         return
 
-    load_label_encoder_if_needed()
-    load_tokenizer_if_needed()
-    ensure_model_file(PHASE2_CKPT)
+    # ✅ lock to prevent concurrent double-load
+    with _model_lock:
+        if model is not None:
+            return
 
-    print("[LOAD] creating model...")
-    model_local = DomainExpert(NUM_CLASSES).to(DEVICE)
+        load_label_encoder_if_needed()
+        load_tokenizer_if_needed()
+        ensure_model_file(PHASE2_CKPT)
 
-    print("[LOAD] loading weights from:", PHASE2_CKPT)
-    ckpt = torch.load(PHASE2_CKPT, map_location=DEVICE)
-    sd = extract_state_dict(ckpt)
-    if isinstance(sd, dict):
-        sd = {k.replace("module.", ""): v for k, v in sd.items()}
+        print("[LOAD] creating model backbone:", BACKBONE_MODEL, "| device:", DEVICE)
+        model_local = DomainExpert(NUM_CLASSES, backbone=BACKBONE_MODEL).to(DEVICE)
 
-    # strict=False to tolerate small key mismatches
-    missing, unexpected = model_local.load_state_dict(sd, strict=False)
-    print("[LOAD] missing keys:", len(missing), "unexpected keys:", len(unexpected))
+        print("[LOAD] loading weights:", PHASE2_CKPT)
+        ckpt = torch.load(PHASE2_CKPT, map_location=DEVICE)
+        sd = extract_state_dict(ckpt)
+        if isinstance(sd, dict):
+            sd = {k.replace("module.", ""): v for k, v in sd.items()}
 
-    model_local.eval()
+        missing, unexpected = model_local.load_state_dict(sd, strict=False)
+        print("[LOAD] missing keys:", len(missing), "unexpected keys:", len(unexpected))
 
-    del ckpt, sd
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
+        model_local.eval()
 
-    model = model_local
-    print("[LOAD] ✅ model ready on", DEVICE)
+        del ckpt, sd
+        gc.collect()
 
+        model = model_local
+        print("[LOAD] ✅ model ready.")
 
 @torch.no_grad()
 def predict_topk(text: str, k: int = 10):
@@ -257,21 +252,17 @@ def predict_topk(text: str, k: int = 10):
     probs_list = top_probs.detach().cpu().numpy().tolist()
     return labels, probs_list
 
-
 # ----------------------------
-# OPTIONAL ASSETS + METRICS (ROBUST)
+# OPTIONAL METRICS
 # ----------------------------
 def pick_true_col(df: pd.DataFrame):
-    candidates = ["true_label", "label", "y_true", "gold", "ground_truth"]
-    for c in candidates:
+    for c in ["true_label", "label", "y_true", "gold", "ground_truth"]:
         if c in df.columns:
             return c
     return None
 
-
 def load_optional_assets_if_needed():
     global df_domain, df_duel, domain_metrics, duel_metrics, plot_metrics_html
-
     if df_domain is not None or df_duel is not None:
         return
 
@@ -283,7 +274,6 @@ def load_optional_assets_if_needed():
             continue
         if "description" in df.columns and "text" not in df.columns:
             df.rename(columns={"description": "text"}, inplace=True)
-
         if "top10_preds" in df.columns:
             df["top10_preds"] = df["top10_preds"].apply(
                 lambda x: ast.literal_eval(x) if isinstance(x, str) else x
@@ -291,9 +281,7 @@ def load_optional_assets_if_needed():
 
     def compute_metrics(df, pred_col):
         true_col = pick_true_col(df)
-        if true_col is None or pred_col is None:
-            return None
-        if pred_col not in df.columns:
+        if true_col is None or pred_col is None or pred_col not in df.columns:
             return None
 
         y_true = df[true_col].astype(str)
@@ -314,25 +302,16 @@ def load_optional_assets_if_needed():
             m["top10_acc"] = float(top10_acc)
         else:
             m["top10_acc"] = None
-
         return m
 
-    # Domain metrics
     if df_domain is not None:
         domain_metrics = compute_metrics(df_domain, "top1_pred")
-        if domain_metrics is None:
-            print("[WARN] domain metrics unavailable.")
-
-    # Duel metrics
     if df_duel is not None:
         duel_pred_col = "final_duel_pred" if "final_duel_pred" in df_duel.columns else (
             "duel_pred" if "duel_pred" in df_duel.columns else None
         )
         duel_metrics = compute_metrics(df_duel, duel_pred_col)
-        if duel_metrics is None:
-            print("[WARN] duel metrics unavailable.")
 
-    # Plot (if both available)
     if domain_metrics and duel_metrics and domain_metrics.get("top10_acc") is not None and duel_metrics.get("top10_acc") is not None:
         categories = ["Accuracy Top-1", "Top-10 Accuracy", "F1 Macro"]
         fig = go.Figure(data=[
@@ -344,14 +323,12 @@ def load_optional_assets_if_needed():
     else:
         plot_metrics_html = None
 
-
 # ----------------------------
 # ROUTES
 # ----------------------------
 @app.route("/ping")
 def ping():
     return "pong", 200
-
 
 @app.route("/health")
 def health():
@@ -365,66 +342,44 @@ def health():
     return jsonify({
         "ok": True,
         "device": DEVICE,
-        "data_dir": DATA_DIR,
+        "backbone": BACKBONE_MODEL,
         "data_files": files,
         "exists": {
             "global_csv": os.path.exists(GLOBAL_CSV),
             "domain_csv": os.path.exists(DOMAIN_CSV),
             "duel_csv": os.path.exists(DUEL_CSV),
             "pth_present": os.path.exists(PHASE2_CKPT),
-            "static_bg": os.path.exists(os.path.join(STATIC_DIR, BACKGROUND_IMAGE_FILE))
-        },
-        "paths": {
-            "GLOBAL_CSV": GLOBAL_CSV,
-            "DOMAIN_CSV": DOMAIN_CSV,
-            "DUEL_CSV": DUEL_CSV,
-            "PHASE2_CKPT": PHASE2_CKPT
         },
         "env": {
             "HF_REPO_ID": HF_REPO_ID,
             "HF_FILENAME": HF_FILENAME,
             "HF_TOKEN_set": bool(HF_TOKEN),
-            "HF_CACHE_DIR": HF_CACHE_DIR
         }
     })
 
-
 @app.route("/health_model")
 def health_model():
-    """Debug endpoint: actually tries to run a tiny prediction."""
     try:
         labels, probs = predict_topk("test produit", k=3)
-        return jsonify({"ok": True, "labels": labels, "conf": probs, "device": DEVICE})
+        return jsonify({"ok": True, "labels": labels, "conf": probs})
     except Exception as e:
         return jsonify({"ok": False, "error": f"{type(e).__name__}: {str(e)}"}), 500
 
-
 @app.route("/predict", methods=["POST"])
 def predict_api():
-    """
-    JSON API:
-    POST /predict
-    body: {"text": "..." , "k": 10}
-    returns JSON always (fixes front error: Unexpected end of JSON input)
-    """
     data = request.get_json(silent=True) or {}
     text = (data.get("text") or "").strip()
-    k = data.get("k", 10)
+    k = int(data.get("k", 10))
 
     if not text:
         return jsonify({"ok": False, "error": "Missing 'text'"}), 400
 
     try:
-        labels, probs = predict_topk(text, k=int(k))
-        return jsonify({
-            "ok": True,
-            "top1": labels[0],
-            "top10": labels,
-            "conf": float(probs[0])
-        })
+        labels, probs = predict_topk(text, k=k)
+        return jsonify({"ok": True, "top1": labels[0], "top10": labels, "conf": float(probs[0])})
     except Exception as e:
+        # always JSON
         return jsonify({"ok": False, "error": f"{type(e).__name__}: {str(e)}"}), 500
-
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -434,7 +389,6 @@ def index():
 
     background_image_url = url_for("static", filename=BACKGROUND_IMAGE_FILE)
 
-    # load optional CSV + metrics
     try:
         load_optional_assets_if_needed()
     except Exception as e:
@@ -450,10 +404,8 @@ def index():
             try:
                 df_new = pd.read_csv(uploaded_file, sep=None, engine="python", on_bad_lines="skip")
                 df_new = normalize_columns(df_new)
-
                 if "description" in df_new.columns and "text" not in df_new.columns:
                     df_new.rename(columns={"description": "text"}, inplace=True)
-
                 if "text" not in df_new.columns:
                     llm_msg = "CSV doit contenir une colonne 'text' (ou 'description')."
                 else:
@@ -467,14 +419,12 @@ def index():
         elif uploaded_image:
             products = ["Description générée automatiquement à partir de l'image"]
 
-    # Predict only if needed
     if products:
         try:
             for prod in products:
                 prod = str(prod).strip()
                 if not prod:
                     continue
-
                 top_labels, top_probs = predict_topk(prod, k=10)
                 prediction_results.append({
                     "text": prod,
@@ -509,10 +459,6 @@ def index():
         elapsed_time=elapsed_time
     )
 
-
-# ----------------------------
-# MAIN
-# ----------------------------
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "5000"))
     app.run(host="0.0.0.0", port=port, debug=True, use_reloader=False)
